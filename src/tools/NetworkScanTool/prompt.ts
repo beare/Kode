@@ -1,33 +1,56 @@
-export const DESCRIPTION = `Scans the local network to discover devices using various network discovery protocols and techniques.
+export const DESCRIPTION = `Discovers devices on the local network using network scanning or discovery protocols.
 
-This tool performs network scanning using multiple approaches:
+This tool supports two modes:
+
+**Scan Mode (ARP + Ping)**:
 - ARP scanning for Layer 2 device discovery
 - Ping sweep for active host detection
-- mDNS/Bonjour discovery for service advertisement
-- NetBIOS name resolution (Windows networks)
-- UPnP/SSDP discovery for network devices
+- Provides IP, MAC, vendor, and response time
 
-The tool requires appropriate network permissions and works best when run with sufficient privileges.`
+**Discovery Mode (mDNS/DNS-SD protocols)**:
+- Enhanced mDNS/DNS-SD (RFC 6762/6763) discovery including ZNB devices
+- SSDP/UPnP discovery for media servers, smart TVs, and IoT devices
+- Hikvision SADP protocol for IP camera discovery
+- Apple AirPlay protocol for Apple TV discovery
+- Provides device type, port, TXT records, and detailed metadata
+
+The tool requires appropriate network permissions. Discovery mode is recommended for IoT and smart home devices.`
 
 export const PROMPT = `You have access to a NetworkScan tool that can discover devices on the local network.
 
 **Usage Guidelines:**
 - Specify the target network range (e.g., "192.168.1.0/24") or leave empty to auto-detect
-- Choose scan method: "quick" (ping only), "standard" (ARP + ping), or "comprehensive" (all methods)
-- Set timeout for scan completion (default: 30 seconds)
-- Be aware that comprehensive scans may take longer and require elevated privileges
+- Choose method: "scan" (ARP + Ping) or "discovery" (mDNS/DNS-SD protocols)
+- Set timeout for completion (default: 30 seconds)
+- Discovery mode may require elevated privileges for full functionality
 
-**Scan Methods:**
-1. **quick**: Fast ping sweep only, minimal information
-2. **standard**: ARP + ping, good balance of speed and detail
-3. **comprehensive**: All discovery methods, most detailed but slower
+**Methods:**
+
+1. **scan**: Network scanning via ARP + Ping
+   - ARP scanning for MAC addresses and vendor identification
+   - Ping sweep for active host detection and response times
+   - Provides: IP, MAC, vendor, response time
+   - Use for: Basic network inventory, finding active hosts
+
+2. **discovery** (default, recommended): Service discovery protocols
+   - Enhanced mDNS/DNS-SD for service types (ZNB, AirPlay, HomeKit, Chromecast, Printers, etc.)
+   - SSDP/UPnP for media servers, routers, smart TVs, and streaming devices
+   - Hikvision SADP protocol for IP cameras
+   - Apple AirPlay protocol for Apple TV devices
+   - ZNB device discovery via _znb._tcp service with JSON TXT records
+   - Provides: IP, hostname, port, device type, TXT records (metadata), services
+   - Use for: IoT devices, smart home discovery, detailed device information
 
 **Output Information:**
 - IP addresses of discovered devices
 - MAC addresses (when available via ARP)
 - Hostnames (when resolvable)
 - Device vendors (MAC OUI lookup)
-- Open ports and services (in comprehensive mode)
+- Device types (Hikvision Camera, Apple TV, ZNB Device, etc.)
+- Device models and firmware versions (for specialized devices)
+- Port numbers (from mDNS and specialized protocols)
+- TXT records (mDNS metadata: version, model, serial, features, etc.)
+- Network services (from mDNS/DNS-SD)
 - Response times
 
 **Security Considerations:**
@@ -38,14 +61,14 @@ export const PROMPT = `You have access to a NetworkScan tool that can discover d
 
 **Platform Support:**
 - macOS: Full support with native tools (arp, ping, dns-sd)
-- Linux: Full support (requires net-tools, nmap for comprehensive scans)
-- Windows: Partial support (arp, ping, netstat)
+- Linux: Full support (requires net-tools, avahi for mDNS)
+- Windows: Partial support (arp, ping)
 
 **Example Usage:**
-- Scan default network: No parameters needed
-- Scan specific range: target="192.168.1.0/24"
-- Quick scan: method="quick"
-- Detailed scan: method="comprehensive", timeout=60
+- Discovery mode (default): No parameters needed
+- Scan mode: method="scan"
+- Specific network range: target="192.168.1.0/24"
+- Extended timeout: timeout=60
 
 **Limitations:**
 - Devices with strict firewall rules may not respond

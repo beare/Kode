@@ -4,11 +4,17 @@ A comprehensive network scanning tool for discovering devices on local networks 
 
 ## Features
 
-- **Multiple Scan Methods**: Quick, standard, and comprehensive scanning modes
+- **Two Methods**:
+  - **Scan** (ARP + Ping for active hosts)
+  - **Discovery** (mDNS/DNS-SD and other discovery protocols)
 - **Protocol Support**:
   - ARP (Address Resolution Protocol) scanning
   - ICMP ping sweep
-  - mDNS/Bonjour service discovery
+  - mDNS/Bonjour service discovery using `dns-sd -Z`
+  - **ZNB device discovery** via mDNS (_znb._tcp service) with JSON TXT records
+  - **Hikvision SADP protocol** for IP camera discovery
+  - **Apple AirPlay protocol** for Apple TV discovery
+  - SSDP/UPnP for smart home and media devices
   - DNS hostname resolution
 - **Device Information**:
   - IP addresses
@@ -16,7 +22,12 @@ A comprehensive network scanning tool for discovering devices on local networks 
   - Hardware vendors (via MAC OUI lookup)
   - Hostnames
   - Response times
-  - Network services (in comprehensive mode)
+  - **Device types** (Hikvision Camera, Apple TV, ZNB Device, etc.)
+  - **Device models and firmware versions** (for specialized devices)
+  - **Port numbers** (from mDNS and specialized protocols)
+  - **TXT records** (mDNS metadata including version, model, features, etc.)
+  - Network services (from mDNS/DNS-SD)
+  - Discovered mDNS services
 - **Cross-Platform**: Supports macOS, Linux, and Windows
 
 ## Usage
@@ -26,42 +37,44 @@ The tool accepts the following parameters:
 ```typescript
 {
   target?: string,      // Network range in CIDR notation (e.g., "192.168.1.0/24")
-  method?: "quick" | "standard" | "comprehensive",
-  timeout?: number      // Scan timeout in seconds (default: 30)
+  method?: "scan" | "discovery",
+  timeout?: number      // Timeout in seconds (default: 30)
 }
 ```
 
-### Scan Methods
+### Methods
 
-1. **quick**: Fast ping sweep only
-   - Fastest option
-   - Only detects active hosts and response times
-   - No MAC address or vendor information
+1. **scan**: Network scanning (ARP + Ping)
+   - ARP scanning for MAC addresses and vendor identification
+   - Ping sweep for active host detection
+   - Provides: IP, MAC, vendor, response time
+   - Fast and efficient for basic network inventory
+   - Use when you need to find active hosts on the network
 
-2. **standard** (default): ARP + ping sweep
-   - Good balance of speed and detail
-   - Provides IP, MAC, vendor, and response time
-   - Recommended for most use cases
-
-3. **comprehensive**: All discovery methods
-   - Slowest but most detailed
-   - Includes mDNS service discovery
-   - May require elevated privileges
+2. **discovery** (default, recommended): Service discovery protocols
+   - Enhanced mDNS/DNS-SD service discovery using `dns-sd -Z`
+   - **Discovers ZNB devices via _znb._tcp with JSON TXT records**
+   - **Discovers Hikvision IP cameras via SADP protocol**
+   - **Discovers Apple TV devices via AirPlay protocol**
+   - SSDP/UPnP discovery for smart TVs and media devices
+   - Provides: IP, hostname, port, device type, TXT records, services
+   - May require elevated privileges for full functionality
+   - **Recommended for IoT devices and smart home discovery**
 
 ### Examples
 
 ```typescript
-// Auto-detect network and use standard scan
+// Auto-detect network and use discovery mode (recommended)
 { }
 
-// Scan specific network range
-{ target: "192.168.1.0/24" }
+// Scan mode (ARP + Ping)
+{ method: "scan" }
 
-// Quick scan with custom timeout
-{ method: "quick", timeout: 15 }
+// Discovery mode with specific network range
+{ method: "discovery", target: "192.168.1.0/24" }
 
-// Comprehensive scan
-{ method: "comprehensive", timeout: 60 }
+// Extended timeout for larger networks
+{ timeout: 60 }
 ```
 
 ## Output Format
@@ -74,7 +87,12 @@ The tool accepts the following parameters:
     hostname?: string,
     vendor?: string,
     responseTime?: number,
-    services?: string[]
+    services?: string[],
+    deviceType?: string,        // e.g., "Hikvision Camera", "Apple TV", "ZNB Device"
+    model?: string,              // Device model number
+    firmwareVersion?: string,    // Firmware version (for cameras)
+    port?: number,               // Primary service port
+    txtRecords?: Record<string, string>  // mDNS TXT records (device metadata)
   }>,
   networkRange: string,
   scanMethod: string,
@@ -140,14 +158,31 @@ The tool accepts the following parameters:
    - Requires properly configured DNS infrastructure
    - May fail for devices without PTR records
 
+5. **Hikvision SADP Discovery**
+   - Search Active Devices Protocol (SADP)
+   - UDP broadcast on port 37020
+   - Discovers Hikvision IP cameras and DVRs/NVRs
+   - Returns device model, firmware version, and HTTP port
+   - Works on all Hikvision security products
+
+6. **Apple TV AirPlay Discovery**
+   - Uses Bonjour/mDNS `_airplay._tcp` service
+   - Also scans for `_touch-able._tcp` (Apple TV Remote)
+   - Port scanning on AirPlay port 7000
+   - Discovers all Apple TV generations (HD, 4K, etc.)
+   - Also discovers HomePods and AirPort Express with AirPlay
+
 ### MAC Vendor Database
 
 The tool includes an offline MAC OUI (Organizationally Unique Identifier) database for common vendors including:
-- Apple devices
+- **Hikvision IP cameras** (10+ MAC prefixes)
+- Apple devices (iPhones, iPads, Macs, Apple TVs)
 - Cisco networking equipment
 - VMware virtual machines
 - Samsung, Dell, Intel, Microsoft devices
 - And many more
+
+This allows immediate vendor identification even when network access is restricted.
 
 ## Limitations
 
