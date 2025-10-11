@@ -361,11 +361,29 @@ async function performMdnsScan(
           parsedTxtRecords = {}
           for (const entry of txt) {
             if (typeof entry === 'string') {
+              // Try to parse as JSON first (for ZNB devices)
+              if (entry.startsWith('{') && entry.endsWith('}')) {
+                try {
+                  const jsonData = JSON.parse(entry)
+                  // Merge JSON data into txtRecords
+                  for (const [key, value] of Object.entries(jsonData)) {
+                    parsedTxtRecords[key] = String(value)
+                  }
+                  continue
+                } catch {
+                  // Not valid JSON, treat as regular string
+                }
+              }
+
+              // Parse key=value format
               const eqIndex = entry.indexOf('=')
               if (eqIndex > 0) {
                 const key = entry.substring(0, eqIndex).trim()
                 const value = entry.substring(eqIndex + 1).trim()
                 parsedTxtRecords[key] = value
+              } else {
+                // Store as raw entry if no = sign
+                parsedTxtRecords.raw = entry
               }
             }
           }
