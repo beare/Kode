@@ -1,17 +1,16 @@
-export const PRODUCT_NAME = 'Kode'
-export const PRODUCT_URL = 'https://github.com/shareAI-lab/Anykode'
+export const PRODUCT_NAME = 'ZnbAI'
+export const PRODUCT_URL = 'https://github.com/beare/Kode'
 export const PROJECT_FILE = 'AGENTS.md'
-export const PRODUCT_COMMAND = 'kode'
-export const CONFIG_BASE_DIR = '.kode'
-export const CONFIG_FILE = '.kode.json'
+export const PRODUCT_COMMAND = 'znbai'
+export const CONFIG_BASE_DIR = '.znbai'
+export const CONFIG_FILE = '.znbai.json'
 export const GITHUB_ISSUES_REPO_URL =
-  'https://github.com/shareAI-lab/Anykode/issues'
+  'https://github.com/beare/Kode/issues'
 
 export const ASCII_LOGO = `
-  _                     _       _  __              _        
- | |       __ _   ___  | |_    | |/ /   ___     __| |   ___ 
- | |      / _\` | / __| | __|   | ' /   / _ \\   / _\` |  / _ \\
- | |___  | (_| | \\__ \\ | |_    | . \\  | (_) | | (_| | |  __/
- |_____|  \\__,_| |___/  \\__|   |_|\\_\\  \\___/   \\__,_|  \\___|
-                                                            
+  _____  _ ___     _   ___ 
+ |_  / \\| | _ )   /_\\ |_ _|
+  / /| . | _ \\  / _ \\ | | 
+ /___|_|\\_|___/ /_/ \\_\\___|
+                                                                       
 `

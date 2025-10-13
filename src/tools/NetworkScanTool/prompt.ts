@@ -7,7 +7,8 @@ This tool supports two modes:
 - Ping sweep for active host detection
 - Provides IP, MAC, vendor, and response time
 
-**Discovery Mode (mDNS/DNS-SD protocols)**:
+**Discovery Mode (Network mapping and service discovery)**:
+- Nmap network mapping for comprehensive device discovery (requires nmap to be installed)
 - Enhanced mDNS/DNS-SD (RFC 6762/6763) discovery including ZNB devices
 - SSDP/UPnP discovery for media servers, smart TVs, and IoT devices
 - Hikvision SADP protocol for IP camera discovery
@@ -32,14 +33,19 @@ export const PROMPT = `You have access to a NetworkScan tool that can discover d
    - Provides: IP, MAC, vendor, response time
    - Use for: Basic network inventory, finding active hosts
 
-2. **discovery** (default, recommended): Service discovery protocols
+2. **discovery** (default, recommended): Network mapping and service discovery protocols
+   - Nmap network scanning for comprehensive device discovery with MAC addresses and vendor info
    - Enhanced mDNS/DNS-SD for service types (ZNB, AirPlay, HomeKit, Chromecast, Printers, etc.)
    - SSDP/UPnP for media servers, routers, smart TVs, and streaming devices
    - Hikvision SADP protocol for IP cameras
    - Apple AirPlay protocol for Apple TV devices
    - ZNB device discovery via _znb._tcp service with JSON TXT records
-   - Provides: IP, hostname, port, device type, TXT records (metadata), services
+   - Provides: IP, hostname, MAC, vendor, port, device type, TXT records (metadata), services
    - Use for: IoT devices, smart home discovery, detailed device information
+   - Note: Requires nmap to be installed. If nmap is not found, install it using:
+     * macOS: 'brew install nmap'
+     * Linux: 'sudo apt-get install nmap' or 'sudo yum install nmap'
+     * Windows: Download from https://nmap.org/download.html
 
 **Output Information:**
 - IP addresses of discovered devices
@@ -60,9 +66,14 @@ export const PROMPT = `You have access to a NetworkScan tool that can discover d
 - Firewall rules may block some discovery methods
 
 **Platform Support:**
-- macOS: Full support with native tools (arp, ping, dns-sd)
-- Linux: Full support (requires net-tools, avahi for mDNS)
-- Windows: Partial support (arp, ping)
+- macOS: Full support with native tools (arp, ping, dns-sd) + nmap recommended
+- Linux: Full support (requires net-tools, avahi for mDNS) + nmap recommended
+- Windows: Partial support (arp, ping) + nmap recommended
+
+**Dependencies:**
+- Discovery mode works best with nmap installed for comprehensive device information
+- If nmap is not installed, discovery mode will still work but with limited MAC/vendor info
+- When nmap errors occur, you should inform the user to install nmap for better results
 
 **Example Usage:**
 - Discovery mode (default): No parameters needed

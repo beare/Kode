@@ -170,6 +170,82 @@ async function getLocalNetworkRange(): Promise<string> {
   return '192.168.1.0/24'
 }
 
+async function performNmapScan(
+  networkRange: string,
+  signal: AbortSignal,
+): Promise<Map<string, {
+  mac?: string;
+  vendor?: string;
+  hostname?: string;
+  openPorts?: number[];
+  osGuess?: string;
+}>> {
+  const devices = new Map<string, {
+    mac?: string;
+    vendor?: string;
+    hostname?: string;
+    openPorts?: number[];
+    osGuess?: string;
+  }>()
+
+  // Run nmap with options: -sn (ping scan), -PR (ARP scan)
+  // Using lighter options for faster scanning, no root privileges required
+  // Note: This will throw if nmap is not installed
+  const { stdout } = await execAsync(
+    `nmap -sn -PR --unprivileged ${networkRange}`,
+    { signal, timeout: 60000 }
+  )
+
+  // Parse nmap output
+  const lines = stdout.split('\n')
+  let currentIp: string | undefined
+  let currentMac: string | undefined
+  let currentVendor: string | undefined
+  let currentHostname: string | undefined
+
+  for (const line of lines) {
+    const trimmedLine = line.trim()
+
+    // Parse "Nmap scan report for hostname (ip)"
+    const reportMatch = trimmedLine.match(/Nmap scan report for (?:(.+?) \()?([0-9.]+)\)?/)
+    if (reportMatch) {
+      // Save previous device if exists
+      if (currentIp) {
+        devices.set(currentIp, {
+          mac: currentMac,
+          vendor: currentVendor,
+          hostname: currentHostname,
+        })
+      }
+
+      // Start new device
+      currentHostname = reportMatch[1]
+      currentIp = reportMatch[2]
+      currentMac = undefined
+      currentVendor = undefined
+      continue
+    }
+
+    // Parse "MAC Address: AA:BB:CC:DD:EE:FF (Vendor Name)"
+    const macMatch = trimmedLine.match(/MAC Address: ([0-9A-F:]+)(?: \((.+)\))?/i)
+    if (macMatch) {
+      currentMac = macMatch[1]?.toUpperCase()
+      currentVendor = macMatch[2]
+    }
+  }
+
+  // Save last device
+  if (currentIp) {
+    devices.set(currentIp, {
+      mac: currentMac,
+      vendor: currentVendor,
+      hostname: currentHostname,
+    })
+  }
+
+  return devices
+}
+
 async function performArpScan(
   networkRange: string,
   signal: AbortSignal,
@@ -897,6 +973,26 @@ export const NetworkScanTool = {
         }
       } else {
         // Discovery mode: mDNS/DNS-SD and other discovery protocols
+
+        // Nmap scan for comprehensive device discovery
+        try {
+          const nmapResults = await performNmapScan(
+            networkRange,
+            abortController.signal,
+          )
+          for (const [ip, nmapInfo] of nmapResults) {
+            devicesMap.set(ip, {
+              ip,
+              mac: nmapInfo.mac,
+              vendor: nmapInfo.vendor,
+              hostname: nmapInfo.hostname,
+            })
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          errors.push(`Nmap scan failed: ${errorMessage}`)
+        }
+
         // Enhanced mDNS/DNS-SD scan
         try {
           const mdnsResults = await performMdnsScan(abortController.signal)
@@ -956,8 +1052,9 @@ export const NetworkScanTool = {
               })
             }
           }
-        } catch {
-          errors.push('mDNS scan failed')
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          errors.push(`mDNS scan failed: ${errorMessage}`)
         }
 
         // SSDP/UPnP Discovery
@@ -994,8 +1091,9 @@ export const NetworkScanTool = {
               })
             }
           }
-        } catch {
-          errors.push('SSDP/UPnP discovery failed')
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          errors.push(`SSDP/UPnP discovery failed: ${errorMessage}`)
         }
 
         // Hikvision SADP discovery
@@ -1021,8 +1119,9 @@ export const NetworkScanTool = {
               })
             }
           }
-        } catch {
-          errors.push('Hikvision SADP discovery failed')
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          errors.push(`Hikvision SADP discovery failed: ${errorMessage}`)
         }
 
         // DNS hostname resolution for discovery mode
