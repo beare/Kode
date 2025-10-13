@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { build } from 'esbuild'
 import { existsSync, mkdirSync, writeFileSync, cpSync, readFileSync, readdirSync, statSync, chmodSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve, dirname, relative } from 'node:path'
 
 const SRC_DIR = 'src'
 const OUT_DIR = 'dist'
@@ -33,7 +33,11 @@ function fixRelativeImports(dir) {
     }
     if (!p.endsWith('.js')) continue
     let text = readFileSync(p, 'utf8')
-    // Handle: from '...'
+
+    // First, replace @ aliases with relative paths
+    text = replaceAliases(p, text)
+
+    // Then handle: from '...'
     text = text.replace(/(from\s+['"])(\.{1,2}\/[^'"\n]+)(['"])/gm, (m, a, spec, c) => {
       if (/\.(js|json|node|mjs|cjs)$/.test(spec)) return m
       return a + spec + '.js' + c
@@ -50,6 +54,78 @@ function fixRelativeImports(dir) {
     })
     writeFileSync(p, text)
   }
+}
+
+function replaceAliases(filePath, content) {
+  // Define aliases based on tsconfig.json paths
+  // Each alias can have:
+  // - exact: for exact matches like '@commands'
+  // - wildcard: for path matches like '@commands/*'
+  const aliasConfig = {
+    '@components': { exact: 'components', wildcard: 'components' },
+    '@commands': { exact: 'commands.ts', wildcard: 'commands' },
+    '@utils': { exact: 'utils', wildcard: 'utils' },
+    '@constants': { exact: 'constants', wildcard: 'constants' },
+    '@hooks': { exact: 'hooks', wildcard: 'hooks' },
+    '@services': { exact: 'services', wildcard: 'services' },
+    '@screens': { exact: 'screens', wildcard: 'screens' },
+    '@tools': { exact: 'tools.ts', wildcard: 'tools' },
+    '@tool': { exact: 'Tool.ts' },
+    '@kode-types': { exact: 'types', wildcard: 'types' },
+    '@context': { exact: 'context.ts', wildcard: 'context' },
+    '@history': { exact: 'history.ts' },
+    '@costTracker': { exact: 'cost-tracker.ts' },
+    '@permissions': { exact: 'permissions.ts' },
+    '@query': { exact: 'query.ts' },
+    '@messages': { exact: 'messages.ts' },
+  }
+
+  const fileDir = dirname(filePath)
+  const distRoot = resolve(OUT_DIR)
+
+  // Helper function to resolve and make relative
+  const makeRelativePath = (targetPath) => {
+    const targetAbsolute = resolve(distRoot, targetPath)
+    let relPath = relative(fileDir, targetAbsolute)
+    if (!relPath.startsWith('.')) relPath = './' + relPath
+    // Remove .ts/.tsx extensions from the path
+    relPath = relPath.replace(/\.(ts|tsx)$/, '')
+    return relPath
+  }
+
+  for (const [alias, config] of Object.entries(aliasConfig)) {
+    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+    // 1. Handle exact matches: from '@commands' (no slash)
+    if (config.exact) {
+      const exactPattern = new RegExp(`(from\\s+['"])${escapedAlias}(['"])`, 'g')
+      content = content.replace(exactPattern, (_, prefix, suffix) => {
+        return `${prefix}${makeRelativePath(config.exact)}${suffix}`
+      })
+
+      const exportExactPattern = new RegExp(`(export\\s+[^;]*?from\\s+['"])${escapedAlias}(['"])`, 'g')
+      content = content.replace(exportExactPattern, (_, prefix, suffix) => {
+        return `${prefix}${makeRelativePath(config.exact)}${suffix}`
+      })
+    }
+
+    // 2. Handle wildcard matches: from '@commands/foo' (with slash)
+    if (config.wildcard) {
+      const wildcardPattern = new RegExp(`(from\\s+['"])${escapedAlias}/([^'"]+)(['"])`, 'g')
+      content = content.replace(wildcardPattern, (_, prefix, subPath, suffix) => {
+        const targetPath = join(config.wildcard, subPath)
+        return `${prefix}${makeRelativePath(targetPath)}${suffix}`
+      })
+
+      const exportWildcardPattern = new RegExp(`(export\\s+[^;]*?from\\s+['"])${escapedAlias}/([^'"]+)(['"])`, 'g')
+      content = content.replace(exportWildcardPattern, (_, prefix, subPath, suffix) => {
+        const targetPath = join(config.wildcard, subPath)
+        return `${prefix}${makeRelativePath(targetPath)}${suffix}`
+      })
+    }
+  }
+
+  return content
 }
 
 async function main() {

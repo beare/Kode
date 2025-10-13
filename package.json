@@ -1,25 +1,23 @@
 {
-  "name": "@shareai-lab/kode",
-  "version": "1.1.23",
+  "name": "@znb-ai/znbai",
+  "version": "1.1.26",
   "bin": {
-    "kode": "cli.js",
-    "kwa": "cli.js",
-    "kd": "cli.js"
+    "znbai": "cli.js"
   },
   "engines": {
     "node": ">=20.18.1"
   },
   "main": "cli.js",
-  "author": "ShareAI-lab <ai-lab@foxmail.com>",
+  "author": "Beare <longlongintlonglong@gmail.com>",
   "license": "Apache-2.0",
   "description": "AI-powered terminal assistant that understands your codebase, edits files, runs commands, and automates development workflows.",
-  "homepage": "https://github.com/shareAI-lab/kode",
+  "homepage": "https://github.com/beare/znbai",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shareAI-lab/kode.git"
+    "url": "git+https://github.com/beare/znbai.git"
   },
   "bugs": {
-    "url": "https://github.com/shareAI-lab/kode/issues"
+    "url": "https://github.com/beare/znbai/issues"
   },
   "files": [
     "cli.js",

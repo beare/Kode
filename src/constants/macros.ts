@@ -5,7 +5,7 @@ const pkg = require('../../package.json')
 
 export const MACRO = {
   VERSION: pkg.version,
-  README_URL: 'https://github.com/shareAI-lab/kode#readme',
-  PACKAGE_URL: '@shareai-lab/kode',
-  ISSUES_EXPLAINER: 'report the issue at https://github.com/shareAI-lab/kode/issues',
+  README_URL: 'https://github.com/beare/znbai#readme',
+  PACKAGE_URL: '@beare/znbai',
+  ISSUES_EXPLAINER: 'report the issue at https://github.com/beare/znbai/issues',
 }
