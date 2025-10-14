@@ -285,7 +285,7 @@ const runWithNode = () => {
 };
 
 // Start with Bun preference
-runWithBun();
+runWithNode();
 `;
 
   writeFileSync('cli.js', cliWrapper);
