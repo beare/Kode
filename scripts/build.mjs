@@ -1,10 +1,40 @@
 #!/usr/bin/env node
 import { build } from 'esbuild'
 import { existsSync, mkdirSync, writeFileSync, cpSync, readFileSync, readdirSync, statSync, chmodSync } from 'node:fs'
-import { join, resolve, dirname, relative } from 'node:path'
+import { join, relative, dirname } from 'node:path'
 
 const SRC_DIR = 'src'
 const OUT_DIR = 'dist'
+
+// TypeScript path aliases mapping (from tsconfig.json)
+const PATH_ALIASES = {
+  '@components': 'src/components',
+  '@components/*': 'src/components/*',
+  '@commands': 'src/commands.ts',
+  '@commands/*': 'src/commands/*',
+  '@utils': 'src/utils',
+  '@utils/*': 'src/utils/*',
+  '@constants': 'src/constants',
+  '@constants/*': 'src/constants/*',
+  '@hooks': 'src/hooks',
+  '@hooks/*': 'src/hooks/*',
+  '@services': 'src/services',
+  '@services/*': 'src/services/*',
+  '@screens': 'src/screens',
+  '@screens/*': 'src/screens/*',
+  '@tools': 'src/tools.ts',
+  '@tools/*': 'src/tools/*',
+  '@tool': 'src/Tool.ts',
+  '@kode-types': 'src/types',
+  '@kode-types/*': 'src/types/*',
+  '@context': 'src/context.ts',
+  '@context/*': 'src/context/*',
+  '@history': 'src/history.ts',
+  '@costTracker': 'src/cost-tracker.ts',
+  '@permissions': 'src/permissions.ts',
+  '@query': 'src/query.ts',
+  '@messages': 'src/messages.ts',
+}
 
 function collectEntries(dir, acc = []) {
   const items = readdirSync(dir)
@@ -22,6 +52,65 @@ function collectEntries(dir, acc = []) {
   return acc
 }
 
+/**
+ * Resolve a TypeScript path alias to a relative path
+ * @param {string} aliasImport - The import path (e.g., '@services/sentry')
+ * @param {string} currentFile - The current file path in dist (e.g., 'dist/entrypoints/cli.js')
+ * @returns {string|null} - The resolved relative path or null if not an alias
+ */
+function resolveAlias(aliasImport, currentFile) {
+  // Try exact match first
+  if (PATH_ALIASES[aliasImport]) {
+    const targetPath = PATH_ALIASES[aliasImport]
+    return calculateRelativePath(currentFile, targetPath)
+  }
+
+  // Try wildcard match
+  for (const [alias, target] of Object.entries(PATH_ALIASES)) {
+    if (!alias.endsWith('/*')) continue
+
+    const aliasPrefix = alias.slice(0, -2) // Remove '/*'
+    if (aliasImport.startsWith(aliasPrefix + '/')) {
+      const suffix = aliasImport.slice(aliasPrefix.length + 1)
+      const targetPrefix = target.slice(0, -2) // Remove '/*'
+      const targetPath = targetPrefix + '/' + suffix
+      return calculateRelativePath(currentFile, targetPath)
+    }
+  }
+
+  return null
+}
+
+/**
+ * Calculate relative path from current file to target
+ * @param {string} currentFile - Current file path (e.g., 'dist/entrypoints/cli.js')
+ * @param {string} targetPath - Target path (e.g., 'src/services/sentry')
+ * @returns {string} - Relative path (e.g., '../services/sentry')
+ */
+function calculateRelativePath(currentFile, targetPath) {
+  // Convert src path to dist path
+  let distTargetPath = targetPath.replace(/^src\//, 'dist/')
+
+  // Remove .ts/.tsx extension if present
+  const hasExtension = /\.(ts|tsx)$/.test(distTargetPath)
+  if (hasExtension) {
+    distTargetPath = distTargetPath.replace(/\.(ts|tsx)$/, '.js')
+  }
+
+  // Get directory of current file
+  const currentDir = dirname(currentFile)
+
+  // Calculate relative path
+  let relativePath = relative(currentDir, distTargetPath)
+
+  // Ensure it starts with ./ or ../
+  if (!relativePath.startsWith('.') && !relativePath.startsWith('..')) {
+    relativePath = './' + relativePath
+  }
+
+  return relativePath
+}
+
 function fixRelativeImports(dir) {
   const items = readdirSync(dir)
   for (const name of items) {
@@ -32,100 +121,61 @@ function fixRelativeImports(dir) {
       continue
     }
     if (!p.endsWith('.js')) continue
+
     let text = readFileSync(p, 'utf8')
 
-    // First, replace @ aliases with relative paths
-    text = replaceAliases(p, text)
+    // Handle path aliases first (before handling relative imports)
+    // Match: from '@alias/path' or from '@alias'
+    text = text.replace(/(from\s+['"])(@[^'"\n]+)(['"])/gm, (m, a, spec, c) => {
+      const resolved = resolveAlias(spec, p)
+      if (resolved) {
+        // Add .js extension if not pointing to .js, .json, etc.
+        const finalPath = /\.(js|json|node|mjs|cjs)$/.test(resolved) ? resolved : resolved + '.js'
+        return a + finalPath + c
+      }
+      return m
+    })
 
-    // Then handle: from '...'
+    // Handle: export ... from '@alias/path'
+    text = text.replace(/(export\s+[^;]*?from\s+['"])(@[^'"\n]+)(['"])/gm, (m, a, spec, c) => {
+      const resolved = resolveAlias(spec, p)
+      if (resolved) {
+        const finalPath = /\.(js|json|node|mjs|cjs)$/.test(resolved) ? resolved : resolved + '.js'
+        return a + finalPath + c
+      }
+      return m
+    })
+
+    // Handle: dynamic import('@alias/path')
+    text = text.replace(/(import\(\s*['"])(@[^'"\n]+)(['"]\s*\))/gm, (m, a, spec, c) => {
+      const resolved = resolveAlias(spec, p)
+      if (resolved) {
+        const finalPath = /\.(js|json|node|mjs|cjs)$/.test(resolved) ? resolved : resolved + '.js'
+        return a + finalPath + c
+      }
+      return m
+    })
+
+    // Handle relative imports: from '...'
     text = text.replace(/(from\s+['"])(\.{1,2}\/[^'"\n]+)(['"])/gm, (m, a, spec, c) => {
       if (/\.(js|json|node|mjs|cjs)$/.test(spec)) return m
       return a + spec + '.js' + c
     })
+
     // Handle: export ... from '...'
     text = text.replace(/(export\s+[^;]*?from\s+['"])(\.{1,2}\/[^'"\n]+)(['"])/gm, (m, a, spec, c) => {
       if (/\.(js|json|node|mjs|cjs)$/.test(spec)) return m
       return a + spec + '.js' + c
     })
+
     // Handle: dynamic import('...')
     text = text.replace(/(import\(\s*['"])(\.{1,2}\/[^'"\n]+)(['"]\s*\))/gm, (m, a, spec, c) => {
       if (/\.(js|json|node|mjs|cjs)$/.test(spec)) return m
       return a + spec + '.js' + c
     })
+
     writeFileSync(p, text)
   }
-}
-
-function replaceAliases(filePath, content) {
-  // Define aliases based on tsconfig.json paths
-  // Each alias can have:
-  // - exact: for exact matches like '@commands'
-  // - wildcard: for path matches like '@commands/*'
-  const aliasConfig = {
-    '@components': { exact: 'components', wildcard: 'components' },
-    '@commands': { exact: 'commands.ts', wildcard: 'commands' },
-    '@utils': { exact: 'utils', wildcard: 'utils' },
-    '@constants': { exact: 'constants', wildcard: 'constants' },
-    '@hooks': { exact: 'hooks', wildcard: 'hooks' },
-    '@services': { exact: 'services', wildcard: 'services' },
-    '@screens': { exact: 'screens', wildcard: 'screens' },
-    '@tools': { exact: 'tools.ts', wildcard: 'tools' },
-    '@tool': { exact: 'Tool.ts' },
-    '@kode-types': { exact: 'types', wildcard: 'types' },
-    '@context': { exact: 'context.ts', wildcard: 'context' },
-    '@history': { exact: 'history.ts' },
-    '@costTracker': { exact: 'cost-tracker.ts' },
-    '@permissions': { exact: 'permissions.ts' },
-    '@query': { exact: 'query.ts' },
-    '@messages': { exact: 'messages.ts' },
-  }
-
-  const fileDir = dirname(filePath)
-  const distRoot = resolve(OUT_DIR)
-
-  // Helper function to resolve and make relative
-  const makeRelativePath = (targetPath) => {
-    const targetAbsolute = resolve(distRoot, targetPath)
-    let relPath = relative(fileDir, targetAbsolute)
-    if (!relPath.startsWith('.')) relPath = './' + relPath
-    // Remove .ts/.tsx extensions from the path
-    relPath = relPath.replace(/\.(ts|tsx)$/, '')
-    return relPath
-  }
-
-  for (const [alias, config] of Object.entries(aliasConfig)) {
-    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-    // 1. Handle exact matches: from '@commands' (no slash)
-    if (config.exact) {
-      const exactPattern = new RegExp(`(from\\s+['"])${escapedAlias}(['"])`, 'g')
-      content = content.replace(exactPattern, (_, prefix, suffix) => {
-        return `${prefix}${makeRelativePath(config.exact)}${suffix}`
-      })
-
-      const exportExactPattern = new RegExp(`(export\\s+[^;]*?from\\s+['"])${escapedAlias}(['"])`, 'g')
-      content = content.replace(exportExactPattern, (_, prefix, suffix) => {
-        return `${prefix}${makeRelativePath(config.exact)}${suffix}`
-      })
-    }
-
-    // 2. Handle wildcard matches: from '@commands/foo' (with slash)
-    if (config.wildcard) {
-      const wildcardPattern = new RegExp(`(from\\s+['"])${escapedAlias}/([^'"]+)(['"])`, 'g')
-      content = content.replace(wildcardPattern, (_, prefix, subPath, suffix) => {
-        const targetPath = join(config.wildcard, subPath)
-        return `${prefix}${makeRelativePath(targetPath)}${suffix}`
-      })
-
-      const exportWildcardPattern = new RegExp(`(export\\s+[^;]*?from\\s+['"])${escapedAlias}/([^'"]+)(['"])`, 'g')
-      content = content.replace(exportWildcardPattern, (_, prefix, subPath, suffix) => {
-        const targetPath = join(config.wildcard, subPath)
-        return `${prefix}${makeRelativePath(targetPath)}${suffix}`
-      })
-    }
-  }
-
-  return content
 }
 
 async function main() {
