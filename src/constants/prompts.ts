@@ -14,7 +14,7 @@ import { MACRO } from './macros'
 //   'IMPORTANT: Assist with defensive security tasks only. Refuse to create, modify, or improve code that may be used maliciously. Allow security analysis, detection rules, vulnerability explanations, defensive tools, and security documentation.'
 
 export function getCLISyspromptPrefix(): string {
-  return `You are ${PRODUCT_NAME}, ShareAI-lab's Agent AI CLI for terminal & coding.`
+  return `You are ${PRODUCT_NAME}, Znb-AI's Agent AI CLI for terminal & coding.`
 }
 
 export async function getSystemPrompt(): Promise<string[]> {

@@ -1,6 +1,6 @@
 {
   "name": "@znb-ai/znbai",
-  "version": "1.1.32",
+  "version": "1.1.35",
   "bin": {
     "znbai": "cli.js"
   },
