@@ -63,7 +63,7 @@ async function publishRelease() {
 
     // 3. 检查版本是否已存在
     try {
-      execSync(`npm view @znb-ai/opcai@${newVersion} version`, { stdio: 'ignore' });
+      execSync(`npm view @znb-ai/opseye@${newVersion} version`, { stdio: 'ignore' });
       console.log(`❌ Version ${newVersion} already exists on npm`);
       process.exit(1);
     } catch {
@@ -113,9 +113,9 @@ async function publishRelease() {
 
     console.log('\n🎉 Production release published successfully!');
     console.log(`📦 Version: ${newVersion}`);
-    console.log(`🔗 Install with: npm install -g @znb-ai/opcai`);
-    console.log(`🔗 Or: npm install -g @znb-ai/opcai@${newVersion}`);
-    console.log(`📊 View on npm: https://www.npmjs.com/package/@znb-ai/opcai`);
+    console.log(`🔗 Install with: npm install -g @znb-ai/opseye`);
+    console.log(`🔗 Or: npm install -g @znb-ai/opseye@${newVersion}`);
+    console.log(`📊 View on npm: https://www.npmjs.com/package/@znb-ai/opseye`);
     
     console.log('\n💡 Next steps:');
     console.log('   - Commit the version change to git');

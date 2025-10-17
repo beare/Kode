@@ -25,7 +25,7 @@ if (!(cliStats.mode & 0o100)) {
 // Check package.json
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 
-if (!pkg.bin || !pkg.bin.opcai) {
+if (!pkg.bin || !pkg.bin.opseye) {
   console.error('❌ Missing bin field in package.json');
   process.exit(1);
 }
@@ -37,6 +37,6 @@ console.log('\n📋 Package info:');
 console.log(`   Name: ${pkg.name}`);
 console.log(`   Version: ${pkg.version}`);
 console.log(`   Main: ${pkg.main}`);
-console.log(`   Bin: opcai -> ${pkg.bin.opcai}`);
+console.log(`   Bin: opseye -> ${pkg.bin.opseye}`);
 console.log('\n🚀 Ready to publish!');
 console.log('   Run: npm publish');

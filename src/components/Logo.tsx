@@ -70,7 +70,7 @@ export function Logo({
         ) : null}
         <Text>
           <Text color={theme.kode}>✻</Text> Welcome to{' '}
-          <Text bold>{PRODUCT_NAME}</Text> <Text>research preview!</Text>
+          <Text bold>{PRODUCT_NAME}</Text> <Text>research!</Text>
         </Text>
         {/* <AsciiLogo /> */}
 
