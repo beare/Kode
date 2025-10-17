@@ -14,7 +14,7 @@
   - 指标配置存在语法错误
   - 指标配置导致 Telegraf 无法启动
   - 用户明确要求删除或替换
-- 修改时应添加变更注释，说明修改原因和时间
+- 修改时应在文件开头注释处添加变更注释，说明修改原因和时间
 - 参考《IT设备监控系统数据采集建模规范》中的相关规范，尤其注意“命名约定与单位规范”
 
 **修改流程：**
@@ -242,12 +242,12 @@ telegraf --once --config <config_file>
 - **Measurement:** `net`
 - **专属标签:** `interface` (e.g., `eth0`, `GigabitEthernet1/0/1`)
 - **指标字段:** `bytes_sent_total`, `bytes_recv_total`,`packets_sent_total`, `packets_recv_total`,`admin_status_code`, `oper_status_code`
-
-
+  
+  
 
 - ##### **3.5 温度传感器 (Temperature Sensors) - [V4.0 新增]**
 
-
+  
 
   - **Measurement:** `temperature`
   - **专属标签:** `sensor_name` (e.g., `Inlet Temp`, `CPU1 Temp`)
@@ -255,11 +255,11 @@ telegraf --once --config <config_file>
     - `reading_celsius`: 温度读数 (摄氏度)
     - `status_code`: 传感器状态码
 
-
+  
 
   ##### **3.6 电压传感器 (Voltage Sensors) - [V4.0 新增]**
 
-
+  
 
   - **Measurement:** `voltage`
   - **专属标签:** `sensor_name` (e.g., `CPU1 VCORE PG`, `System Board 3.3V PG`)
@@ -267,11 +267,11 @@ telegraf --once --config <config_file>
     - `reading_volts`: 电压读数 (伏特)
     - `status_code`: 传感器状态码
 
-
+  
 
   ##### **3.7 风扇 (Fans) - [V4.0 优化]**
 
-
+  
 
   - **Measurement:** `fan`  *(为保持单数名词风格，从 `fans` 优化为 `fan`)*
   - **专属标签:** `fan_name` (e.g., `Fan1A`, `Fan2B`)
@@ -279,11 +279,11 @@ telegraf --once --config <config_file>
     - `speed_rpm`: 风扇转速 (RPM)
     - `status_code`: 风扇状态码
 
-
+  
 
   ##### **3.8 电源供应器 (Power Supplies) - [V4.0 优化]**
 
-
+  
 
   - **Measurement:** `power_supply`
   - **专属标签:** `psu_name` (e.g., `PSU1`, `PSU2`)
@@ -450,7 +450,7 @@ Ini, TOML
    ```bash
    # 错误的查询方式 (instant query)
    curl -G "http://vm:8428/api/v1/query" --data-urlencode "query=snmp_system_uptime"
-
+   
    # 正确的查询方式 (range query)
    curl -G "http://vm:8428/api/v1/query_range" \
      --data-urlencode "query=snmp_system_uptime" \
@@ -467,7 +467,7 @@ Ini, TOML
    ```bash
    # 测试连接
    curl -u "username:password" "http://vm:8428/api/v1/status/tsdb"
-
+   
    # 检查写入端点
    curl -u "username:password" -X POST \
      -H "Content-Type: text/plain" \
