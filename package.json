@@ -1,8 +1,8 @@
 {
-  "name": "@znb-ai/znbai",
-  "version": "1.1.35",
+  "name": "@znb-ai/opcai",
+  "version": "1.1.38",
   "bin": {
-    "znbai": "cli.js"
+    "opcai": "cli.js"
   },
   "engines": {
     "node": ">=20.18.1"
@@ -11,13 +11,13 @@
   "author": "Beare <longlongintlonglong@gmail.com>",
   "license": "Apache-2.0",
   "description": "AI-powered terminal assistant that understands your codebase, edits files, runs commands, and automates development workflows.",
-  "homepage": "https://github.com/beare/znbai",
+  "homepage": "https://github.com/beare/opcai",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/beare/znbai.git"
+    "url": "git+https://github.com/beare/opcai.git"
   },
   "bugs": {
-    "url": "https://github.com/beare/znbai/issues"
+    "url": "https://github.com/beare/opcai/issues"
   },
   "files": [
     "cli.js",

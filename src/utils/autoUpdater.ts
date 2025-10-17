@@ -53,7 +53,7 @@ export async function getLatestVersion(): Promise<string | null> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 5000)
     const res = await fetch(
-      `https://registry.npmjs.org/${encodeURIComponent(MACRO.PACKAGE_URL)}`,
+      `https://registry.npmmirror.com/${encodeURIComponent(MACRO.PACKAGE_URL)}`,
       {
         method: 'GET',
         headers: {
