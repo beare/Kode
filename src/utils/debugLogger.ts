@@ -62,7 +62,7 @@ const STARTUP_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const REQUEST_START_TIME = Date.now()
 
 // 路径配置 - 统一使用 ~/.kode 目录
-const KODE_DIR = join(homedir(), '.kode')
+const KODE_DIR = join(homedir(), '.opseye')
 function getProjectDir(cwd: string): string {
   return cwd.replace(/[^a-zA-Z0-9]/g, '-')
 }
@@ -988,7 +988,7 @@ export function diagnoseError(error: any, context?: any): ErrorDiagnosis {
       description: 'API authentication failed - invalid or missing API key',
       suggestions: [
         '运行 /login 重新设置 API 密钥',
-        '检查 ~/.kode/ 配置文件中的 API 密钥',
+        '检查 ~/.opseye/ 配置文件中的 API 密钥',
         '验证 API 密钥是否已过期或被撤销',
         '确认使用的 provider 设置正确 (anthropic/opendev/bigdream)',
       ],
@@ -1124,7 +1124,7 @@ export function diagnoseError(error: any, context?: any): ErrorDiagnosis {
       debugSteps: [
         '查看 CONFIG_LOAD 和 CONFIG_SAVE 日志',
         '检查配置文件路径和权限',
-        '验证 JSON 格式: cat ~/.kode/config.json | jq',
+        '验证 JSON 格式: cat ~/.opseye/config.json | jq',
         '查看配置缓存相关的调试信息',
       ],
     }

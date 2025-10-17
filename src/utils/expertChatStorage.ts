@@ -26,7 +26,7 @@ export interface ExpertChatSession {
  */
 function getExpertChatDirectory(): string {
   const configDir =
-    process.env.KODE_CONFIG_DIR ?? process.env.ANYKODE_CONFIG_DIR ?? join(homedir(), '.kode')
+    process.env.KODE_CONFIG_DIR ?? process.env.ANYKODE_CONFIG_DIR ?? join(homedir(), '.opseye')
   const expertChatDir = join(configDir, 'expert-chats')
 
   if (!existsSync(expertChatDir)) {

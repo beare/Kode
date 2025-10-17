@@ -136,9 +136,9 @@ async function loadAllAgents(): Promise<{
     // Scan both .claude and .kode directories in parallel
     // Claude Code compatibility: support both ~/.claude/agents and ~/.kode/agents
     const userClaudeDir = join(homedir(), '.claude', 'agents')
-    const userKodeDir = join(homedir(), '.kode', 'agents')
+    const userKodeDir = join(homedir(), '.opseye', 'agents')
     const projectClaudeDir = join(getCwd(), '.claude', 'agents')
-    const projectKodeDir = join(getCwd(), '.kode', 'agents')
+    const projectKodeDir = join(getCwd(), '.opseye', 'agents')
     
     const [userClaudeAgents, userKodeAgents, projectClaudeAgents, projectKodeAgents] = await Promise.all([
       scanAgentDirectory(userClaudeDir, 'user'),
@@ -234,9 +234,9 @@ export async function startAgentWatcher(onChange?: () => void): Promise<void> {
   
   // Watch both Claude (.claude) and native (.kode) directories
   const userClaudeDir = join(homedir(), '.claude', 'agents')
-  const userKodeDir = join(homedir(), '.kode', 'agents')
+  const userKodeDir = join(homedir(), '.opseye', 'agents')
   const projectClaudeDir = join(getCwd(), '.claude', 'agents')
-  const projectKodeDir = join(getCwd(), '.kode', 'agents')
+  const projectKodeDir = join(getCwd(), '.opseye', 'agents')
   
   const watchDirectory = (dirPath: string, label: string) => {
     if (existsSync(dirPath)) {
@@ -255,9 +255,9 @@ export async function startAgentWatcher(onChange?: () => void): Promise<void> {
   
   // Watch all directories
   watchDirectory(userClaudeDir, 'user/.claude')
-  watchDirectory(userKodeDir, 'user/.kode')
+  watchDirectory(userKodeDir, 'user/.opseye')
   watchDirectory(projectClaudeDir, 'project/.claude')
-  watchDirectory(projectKodeDir, 'project/.kode')
+  watchDirectory(projectKodeDir, 'project/.opseye')
 }
 
 /**
