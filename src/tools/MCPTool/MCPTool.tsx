@@ -6,8 +6,8 @@ import { type Tool } from '@tool'
 import { getTheme } from '@utils/theme'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { OutputLine } from '@tools/BashTool/OutputLine'
-import { KnowledgeListRenderer } from './KnowledgeListRenderer'
-import { CollectModelsRenderer } from './CollectModelsRenderer'
+import { KnowledgeListRenderer } from './opseye/KnowledgeListRenderer'
+import { CollectModelsRenderer } from './opseye/CollectModelsRenderer'
 
 // Allow any input object since MCP tools define their own schemas
 const inputSchema = z.object({}).passthrough()
