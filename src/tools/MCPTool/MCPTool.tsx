@@ -6,6 +6,8 @@ import { type Tool } from '@tool'
 import { getTheme } from '@utils/theme'
 import { DESCRIPTION, PROMPT } from './prompt'
 import { OutputLine } from '@tools/BashTool/OutputLine'
+import { KnowledgeListRenderer } from './KnowledgeListRenderer'
+import { CollectModelsRenderer } from './CollectModelsRenderer'
 
 // Allow any input object since MCP tools define their own schemas
 const inputSchema = z.object({}).passthrough()
@@ -52,7 +54,21 @@ export const MCPTool = {
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />
   },
-  renderToolResultMessage(output) {
+  renderToolResultMessage(
+    output,
+    metadata?: { serverName: string; toolName: string },
+  ) {
+    // Custom rendering for specific MCP tools
+    if (metadata?.serverName === 'opseye-boss') {
+      if (metadata?.toolName === 'getKnowledgeListByType') {
+        return <KnowledgeListRenderer data={output} />
+      }
+      if (metadata?.toolName === 'getCollectModels') {
+        return <CollectModelsRenderer data={output} />
+      }
+    }
+
+    // Default rendering logic
     const verbose = false // Set default value for verbose
     if (Array.isArray(output)) {
       return (

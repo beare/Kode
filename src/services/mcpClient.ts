@@ -432,6 +432,12 @@ export const getMCPTools = memoize(async (): Promise<Tool[]> => {
         userFacingName() {
           return `${client.name}:${tool.name} (MCP)`
         },
+        renderToolResultMessage(output) {
+          return MCPTool.renderToolResultMessage(output, {
+            serverName: client.name,
+            toolName: tool.name,
+          })
+        },
       }),
     ),
   )
