@@ -1,6 +1,6 @@
 {
   "name": "@znb-ai/opseye",
-  "version": "1.1.41",
+  "version": "1.1.48",
   "bin": {
     "opseye": "cli.js"
   },
@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.12.6",
+    "@anthropic-ai/claude-code": "2.0.28",
     "@anthropic-ai/sdk": "^0.39.0",
     "@anthropic-ai/vertex-sdk": "^0.7.0",
     "@commander-js/extra-typings": "^13.1.0",

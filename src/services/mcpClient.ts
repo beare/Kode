@@ -33,7 +33,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { memoize, pickBy } from 'lodash-es'
 import type { Tool } from '@tool'
-import { MCPTool } from '@tools/MCPTool/MCPTool'
+import { MCPTool, formatMCPToolUseMessage } from '@tools/MCPTool/MCPTool'
 import { logMCPError } from '@utils/log'
 import { Command } from '@commands'
 import { PRODUCT_COMMAND } from '@constants/product'
@@ -431,6 +431,12 @@ export const getMCPTools = memoize(async (): Promise<Tool[]> => {
         },
         userFacingName() {
           return `${client.name}:${tool.name} (MCP)`
+        },
+        renderToolUseMessage(input, options) {
+          return formatMCPToolUseMessage(input, options, {
+            serverName: client.name,
+            toolName: tool.name,
+          })
         },
         renderToolResultMessage(output) {
           return MCPTool.renderToolResultMessage(output, {

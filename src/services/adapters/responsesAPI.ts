@@ -67,7 +67,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
 
     return request
   }
-  
+
   buildTools(tools: Tool[]): any[] {
     // Follow codex-cli.js format: flat structure, no nested 'function' object
     return tools.map(tool => {
@@ -83,7 +83,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
 
         if (isPlainObject(tool.inputSchema) && ('type' in tool.inputSchema || 'properties' in tool.inputSchema)) {
           // Already a JSON schema, use directly
-          parameters = tool.inputSchema
+          parameters = tool.inputSchema as Record<string, unknown>
         } else {
           // Try to convert Zod schema
           try {
@@ -123,7 +123,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
       }
     })
   }
-  
+
   async parseResponse(response: any): Promise<UnifiedResponse> {
     // Check if this is a streaming response (Response object with body)
     if (response && typeof response === 'object' && 'body' in response && response.body) {
@@ -408,7 +408,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
     }
     return null
   }
-  
+
   private convertMessagesToInput(messages: any[]): any[] {
     // Convert Chat Completions messages to Response API input format
     // Following reference implementation pattern
@@ -507,7 +507,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
 
     return inputItems
   }
-  
+
   private buildInstructions(systemPrompt: string[]): string {
     // Join system prompts into instructions (following reference implementation)
     const systemContent = systemPrompt
@@ -516,7 +516,7 @@ export class ResponsesAPIAdapter extends ModelAPIAdapter {
 
     return systemContent
   }
-  
+
   private parseToolCalls(response: any): any[] {
     // Enhanced tool call parsing following codex-cli.js pattern
     if (!response.output || !Array.isArray(response.output)) {

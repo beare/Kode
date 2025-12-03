@@ -8,9 +8,31 @@ import { DESCRIPTION, PROMPT } from './prompt'
 import { OutputLine } from '@tools/BashTool/OutputLine'
 import { KnowledgeListRenderer } from './opseye/KnowledgeListRenderer'
 import { CollectModelsRenderer } from './opseye/CollectModelsRenderer'
+import { UpdateCollectConfigRenderer } from './opseye/UpdateCollectConfigRenderer'
+import { formatUpdateCollectConfigToolUse } from './opseye/updateCollectConfigFormatter'
 
 // Allow any input object since MCP tools define their own schemas
 const inputSchema = z.object({}).passthrough()
+
+// Internal function to format tool use messages with optional metadata
+export function formatMCPToolUseMessage(
+  input: any,
+  _options: { verbose: boolean },
+  metadata?: { serverName: string; toolName: string },
+): string {
+  // Custom formatting for specific MCP servers
+  if (
+    metadata?.serverName === 'opseye-boss' &&
+    metadata?.toolName === 'updateCollectConfig'
+  ) {
+    return formatUpdateCollectConfigToolUse(input)
+  }
+
+  // Default formatting
+  return Object.entries(input)
+    .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+    .join(', ')
+}
 
 export const MCPTool = {
   async isEnabled() {
@@ -44,10 +66,8 @@ export const MCPTool = {
   needsPermissions() {
     return true
   },
-  renderToolUseMessage(input) {
-    return Object.entries(input)
-      .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
-      .join(', ')
+  renderToolUseMessage(input, options) {
+    return formatMCPToolUseMessage(input, options, undefined)
   },
   // Overridden in mcpClient.ts
   userFacingName: () => 'mcp',
@@ -65,6 +85,9 @@ export const MCPTool = {
       }
       if (metadata?.toolName === 'getCollectModels') {
         return <CollectModelsRenderer data={output} />
+      }
+      if (metadata?.toolName === 'updateCollectConfig') {
+        return <UpdateCollectConfigRenderer data={output} />
       }
     }
 

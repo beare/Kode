@@ -466,7 +466,7 @@ export function logAPIError(context: {
   provider?: string
 }) {
   const errorDir = join(KODE_DIR, 'logs', 'error', 'api')
-  
+
   // 确保目录存在
   if (!existsSync(errorDir)) {
     try {
@@ -476,13 +476,13 @@ export function logAPIError(context: {
       return // Exit early if we can't create the directory
     }
   }
-  
+
   // 生成文件名
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
   const sanitizedModel = context.model.replace(/[^a-zA-Z0-9-_]/g, '_')
   const filename = `${sanitizedModel}_${timestamp}.log`
   const filepath = join(errorDir, filename)
-  
+
   // 准备完整的日志内容（文件中保存所有信息）
   const fullLogContent = {
     timestamp: new Date().toISOString(),
@@ -501,7 +501,7 @@ export function logAPIError(context: {
       cwd: process.cwd(),
     }
   }
-  
+
   // 写入文件（保存完整信息）
   try {
     appendFileSync(filepath, JSON.stringify(fullLogContent, null, 2) + '\n')
@@ -509,7 +509,7 @@ export function logAPIError(context: {
   } catch (err) {
     console.error('Failed to write API error log:', err)
   }
-  
+
   // 在调试模式下记录到系统日志
   if (isDebugMode()) {
     debug.error('API_ERROR', {
@@ -520,18 +520,18 @@ export function logAPIError(context: {
       logFile: filename,
     })
   }
-  
+
   // 优雅的终端显示（仅在verbose模式下）
   if (isVerboseMode() || isDebugVerboseMode()) {
     console.log()
     console.log(chalk.red('━'.repeat(60)))
     console.log(chalk.red.bold('⚠️  API Error'))
     console.log(chalk.red('━'.repeat(60)))
-    
+
     // 显示关键信息
     console.log(chalk.white('  Model:  ') + chalk.yellow(context.model))
     console.log(chalk.white('  Status: ') + chalk.red(context.status))
-    
+
     // 格式化错误消息
     let errorMessage = 'Unknown error'
     if (typeof context.error === 'string') {
@@ -541,24 +541,24 @@ export function logAPIError(context: {
     } else if (context.error?.error?.message) {
       errorMessage = context.error.error.message
     }
-    
+
     // 错误消息换行显示
     console.log(chalk.white('  Error:  ') + chalk.red(errorMessage))
-    
+
     // 如果有响应体，显示格式化的响应
     if (context.response) {
       console.log()
       console.log(chalk.gray('  Response:'))
-      const responseStr = typeof context.response === 'string' 
-        ? context.response 
+      const responseStr = typeof context.response === 'string'
+        ? context.response
         : JSON.stringify(context.response, null, 2)
-      
+
       // 缩进显示响应内容
       responseStr.split('\n').forEach(line => {
         console.log(chalk.gray('    ' + line))
       })
     }
-    
+
     console.log()
     console.log(chalk.dim(`  📁 Full log: ${filepath}`))
     console.log(chalk.red('━'.repeat(60)))
@@ -573,7 +573,7 @@ export function logLLMInteraction(context: {
   response: any
   usage?: { inputTokens: number; outputTokens: number }
   timing: { start: number; end: number }
-  apiFormat?: 'anthropic' | 'openai'
+  apiFormat?: 'anthropic' | 'openai' | 'openai_responses'
 }) {
   if (!isDebugMode()) return
 

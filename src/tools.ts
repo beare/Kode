@@ -28,7 +28,7 @@ const ANT_ONLY_TOOLS = [MemoryReadTool as unknown as Tool, MemoryWriteTool as un
 export const getAllTools = (): Tool[] => {
   return [
     TaskTool as unknown as Tool,
-    AskExpertModelTool as unknown as Tool,
+    // AskExpertModelTool as unknown as Tool,
     BashTool as unknown as Tool,
     GlobTool as unknown as Tool,
     GrepTool as unknown as Tool,
