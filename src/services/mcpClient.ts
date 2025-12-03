@@ -327,10 +327,34 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
     ...projectServers, // Project servers take highest precedence
   }
 
-  return await Promise.all(
+  const clients = await Promise.all(
     Object.entries(allServers).map(async ([name, serverRef]) => {
       try {
-        const client = await connectToServer(name, serverRef as McpServerConfig)
+        const serverConfig = serverRef as McpServerConfig
+        const client = await connectToServer(name, serverConfig)
+
+        // For SSE connections, monitor connection health
+        if (serverConfig.type === 'sse') {
+          // Set up reconnection on transport close/error
+          const transport = (client as any)._transport
+          if (transport) {
+            transport.onerror = () => {
+              logMCPError(
+                name,
+                'SSE connection lost, clearing cache for reconnection',
+              )
+              resetMCPClients()
+            }
+            transport.onclose = () => {
+              logMCPError(
+                name,
+                'SSE connection closed, clearing cache for reconnection',
+              )
+              resetMCPClients()
+            }
+          }
+        }
+
         return { name, client, type: 'connected' as const }
       } catch (error) {
         logMCPError(
@@ -341,7 +365,19 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
       }
     }),
   )
+
+  return clients
 })
+
+/**
+ * Reset MCP client connections cache
+ * This allows reconnection to previously failed or disconnected servers
+ */
+export function resetMCPClients(): void {
+  getClients.cache.clear?.()
+  getMCPTools.cache.clear?.()
+  getMCPCommands.cache.clear?.()
+}
 
 async function requestAll<
   ResultT extends Result,

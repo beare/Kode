@@ -105,6 +105,7 @@ export type ProviderType =
   | 'azure'
   | 'custom'
   | 'custom-openai'
+  | 'minimax-coding'
 
 // New model system types
 export type ModelProfile = {
