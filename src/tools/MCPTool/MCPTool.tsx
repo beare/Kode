@@ -10,6 +10,7 @@ import { KnowledgeListRenderer } from './opseye/KnowledgeListRenderer'
 import { CollectModelsRenderer } from './opseye/CollectModelsRenderer'
 import { UpdateCollectConfigRenderer } from './opseye/UpdateCollectConfigRenderer'
 import { CreateCollectConfigRenderer } from './opseye/CreateCollectConfigRenderer'
+import { DeviceTypesRenderer } from './opseye/DeviceTypesRenderer'
 import { formatUpdateCollectConfigToolUse } from './opseye/updateCollectConfigFormatter'
 import { formatCreateCollectConfigToolUse } from './opseye/createCollectConfigFormatter'
 
@@ -95,6 +96,9 @@ export const MCPTool = {
       }
       if (metadata?.toolName === 'createCollectConfigWithVersion') {
         return <CreateCollectConfigRenderer data={output} />
+      }
+      if (metadata?.toolName === 'getDeviceTypes') {
+        return <DeviceTypesRenderer data={output} />
       }
     }
 
