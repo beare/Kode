@@ -1,5 +1,4 @@
 #!/usr/bin/env -S node --no-warnings=ExperimentalWarning --enable-source-maps
-import '@utils/sanitizeAnthropicEnv'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { existsSync } from 'node:fs'
@@ -25,6 +24,14 @@ try {
     }
   }
 } catch {}
+
+import { deprecatedAnthropicEnvVars } from '@utils/sanitizeAnthropicEnv'
+
+for (const key of deprecatedAnthropicEnvVars) {
+  if (process.env[key]) {
+    delete process.env[key]
+  }
+}
 
 // XXX: Without this line (and the Object.keys, even though it seems like it does nothing!),
 // there is a bug in Bun only on Win32 that causes this import to be removed, even though
