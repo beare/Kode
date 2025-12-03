@@ -9,7 +9,9 @@ import { OutputLine } from '@tools/BashTool/OutputLine'
 import { KnowledgeListRenderer } from './opseye/KnowledgeListRenderer'
 import { CollectModelsRenderer } from './opseye/CollectModelsRenderer'
 import { UpdateCollectConfigRenderer } from './opseye/UpdateCollectConfigRenderer'
+import { CreateCollectConfigRenderer } from './opseye/CreateCollectConfigRenderer'
 import { formatUpdateCollectConfigToolUse } from './opseye/updateCollectConfigFormatter'
+import { formatCreateCollectConfigToolUse } from './opseye/createCollectConfigFormatter'
 
 // Allow any input object since MCP tools define their own schemas
 const inputSchema = z.object({}).passthrough()
@@ -21,11 +23,13 @@ export function formatMCPToolUseMessage(
   metadata?: { serverName: string; toolName: string },
 ): string {
   // Custom formatting for specific MCP servers
-  if (
-    metadata?.serverName === 'opseye-boss' &&
-    metadata?.toolName === 'updateCollectConfig'
-  ) {
-    return formatUpdateCollectConfigToolUse(input)
+  if (metadata?.serverName === 'opseye-boss') {
+    if (metadata?.toolName === 'updateCollectConfig') {
+      return formatUpdateCollectConfigToolUse(input)
+    }
+    if (metadata?.toolName === 'createCollectConfigWithVersion') {
+      return formatCreateCollectConfigToolUse(input)
+    }
   }
 
   // Default formatting
@@ -88,6 +92,9 @@ export const MCPTool = {
       }
       if (metadata?.toolName === 'updateCollectConfig') {
         return <UpdateCollectConfigRenderer data={output} />
+      }
+      if (metadata?.toolName === 'createCollectConfigWithVersion') {
+        return <CreateCollectConfigRenderer data={output} />
       }
     }
 
