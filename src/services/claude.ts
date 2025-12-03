@@ -1,5 +1,6 @@
 import '@anthropic-ai/sdk/shims/node'
 import Anthropic, { APIConnectionError, APIError } from '@anthropic-ai/sdk'
+import { StreamingEvent } from './adapters/base'
 import { AnthropicBedrock } from '@anthropic-ai/bedrock-sdk'
 import { AnthropicVertex } from '@anthropic-ai/vertex-sdk'
 import type { BetaUsage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
@@ -10,7 +11,7 @@ import 'dotenv/config'
 import { addToTotalCost } from '@costTracker'
 import models from '@constants/models'
 import type { AssistantMessage, UserMessage } from '@query'
-import { Tool } from '@tool'
+import { Tool, getToolDescription } from '@tool'
 import {
   getAnthropicApiKey,
   getOrCreateUserID,
@@ -468,8 +469,7 @@ export async function verifyApiKey(
   if (
     baseURL &&
     (provider === 'anthropic' ||
-      provider === 'bigdream' ||
-      provider === 'opendev')
+      provider === 'minimax-coding')
   ) {
     clientConfig.baseURL = baseURL
   }
@@ -853,10 +853,14 @@ export function getAnthropicClient(
 
   const region = getVertexRegionForModel(model)
 
+  const modelManager = getModelManager()
+  const modelProfile = modelManager.getModel('main')
+
   const defaultHeaders: { [key: string]: string } = {
     'x-app': 'cli',
     'User-Agent': USER_AGENT,
   }
+
   if (process.env.ANTHROPIC_AUTH_TOKEN) {
     defaultHeaders['Authorization'] =
       `Bearer ${process.env.ANTHROPIC_AUTH_TOKEN}`
@@ -882,10 +886,6 @@ export function getAnthropicClient(
     return client
   }
 
-  // Get appropriate API key and baseURL from ModelProfile
-  const modelManager = getModelManager()
-  const modelProfile = modelManager.getModel('main')
-
   let apiKey: string
   let baseURL: string | undefined
 
@@ -893,7 +893,6 @@ export function getAnthropicClient(
     apiKey = modelProfile.apiKey || ''
     baseURL = modelProfile.baseURL
   } else {
-    // Fallback to default anthropic if no ModelProfile
     apiKey = getAnthropicApiKey()
     baseURL = undefined
   }
@@ -1309,7 +1308,8 @@ async function queryLLMWithPromptCaching(
   if (
     provider === 'anthropic' ||
     provider === 'bigdream' ||
-    provider === 'opendev'
+    provider === 'opendev' ||
+    provider === 'minimax-coding'
   ) {
     return queryAnthropicNative(
       messages,
@@ -1374,8 +1374,7 @@ async function queryAnthropicNative(
     // 基于ModelProfile创建专用的API客户端
     if (
       modelProfile.provider === 'anthropic' ||
-      modelProfile.provider === 'bigdream' ||
-      modelProfile.provider === 'opendev'
+      modelProfile.provider === 'minimax-coding'
     ) {
       const clientConfig: any = {
         apiKey: modelProfile.apiKey,
@@ -1431,9 +1430,7 @@ async function queryAnthropicNative(
     tools.map(async tool =>
       ({
         name: tool.name,
-        description: typeof tool.description === 'function' 
-          ? await tool.description() 
-          : tool.description,
+        description: getToolDescription(tool),
         input_schema:'inputJSONSchema' in tool && tool.inputJSONSchema
           ? tool.inputJSONSchema
           : zodToJsonSchema(tool.inputSchema),
@@ -1891,7 +1888,7 @@ async function queryOpenAI(
   type QueryResult = {
     assistantMessage: AssistantMessage
     rawResponse?: any
-    apiFormat: 'openai' | 'openai_responses'
+    apiFormat: 'openai'
   }
 
   let adapterContext: AdapterExecutionContext | null = null
@@ -1907,26 +1904,42 @@ async function queryOpenAI(
     const USE_NEW_ADAPTER_SYSTEM = process.env.USE_NEW_ADAPTERS !== 'false'
 
     if (USE_NEW_ADAPTER_SYSTEM) {
-      const adapter = ModelAdapterFactory.createAdapter(modelProfile)
-      const reasoningEffort = await getReasoningEffort(modelProfile, messages)
-      const unifiedParams: UnifiedRequestParams = {
-        messages: openaiMessages,
-        systemPrompt: openaiSystem.map(s => s.content as string),
-        tools,
-        maxTokens: getMaxTokensFromProfile(modelProfile),
-        stream: config.stream,
-        reasoningEffort: reasoningEffort as any,
-        temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
-        previousResponseId: toolUseContext?.responseState?.previousResponseId,
-        verbosity: 'high',
-      }
+      const shouldUseResponses = ModelAdapterFactory.shouldUseResponsesAPI(modelProfile)
 
-      adapterContext = {
-        adapter,
-        request: adapter.createRequest(unifiedParams),
-        shouldUseResponses: ModelAdapterFactory.shouldUseResponsesAPI(
-          modelProfile,
-        ),
+      // Only use new adapters for Responses API models
+      // Chat Completions models use legacy path for stability
+      if (shouldUseResponses) {
+        const adapter = ModelAdapterFactory.createAdapter(modelProfile)
+        const reasoningEffort = await getReasoningEffort(modelProfile, messages)
+
+        // Determine verbosity based on model name
+        // Most GPT-5 codex models only support 'medium', so default to that unless we detect 'high' in the name
+        let verbosity: 'low' | 'medium' | 'high' = 'medium'
+        const modelNameLower = modelProfile.modelName.toLowerCase()
+        if (modelNameLower.includes('high')) {
+          verbosity = 'high'
+        } else if (modelNameLower.includes('low')) {
+          verbosity = 'low'
+        }
+        // Default to 'medium' for all other cases, including mini, codex, etc.
+
+        const unifiedParams: UnifiedRequestParams = {
+          messages: openaiMessages,
+          systemPrompt: openaiSystem.map(s => s.content as string),
+          tools,
+          maxTokens: getMaxTokensFromProfile(modelProfile),
+          stream: config.stream,
+          reasoningEffort: reasoningEffort as any,
+          temperature: isGPT5Model(model) ? 1 : MAIN_QUERY_TEMPERATURE,
+          previousResponseId: toolUseContext?.responseState?.previousResponseId,
+          verbosity,
+        }
+
+        adapterContext = {
+          adapter,
+          request: adapter.createRequest(unifiedParams),
+          shouldUseResponses: true,
+        }
       }
     }
   }
@@ -1941,62 +1954,27 @@ async function queryOpenAI(
       if (adapterContext) {
         if (adapterContext.shouldUseResponses) {
           const { callGPT5ResponsesAPI } = await import('./openai')
+
           const response = await callGPT5ResponsesAPI(
             modelProfile,
             adapterContext.request,
             signal,
           )
+
           const unifiedResponse = await adapterContext.adapter.parseResponse(
             response,
           )
 
-          // Convert UnifiedResponse.toolCalls to tool_use content blocks
-          const contentBlocks = [...(unifiedResponse.content || [])]
-
-          if (unifiedResponse.toolCalls && unifiedResponse.toolCalls.length > 0) {
-            for (const toolCall of unifiedResponse.toolCalls) {
-              const tool = toolCall.function
-              const toolName = tool?.name
-              let toolArgs = {}
-              try {
-                toolArgs = tool?.arguments ? JSON.parse(tool.arguments) : {}
-              } catch (e) {
-                // Invalid JSON in tool arguments
-              }
-
-              contentBlocks.push({
-                type: 'tool_use',
-                input: toolArgs,
-                name: toolName,
-                id: toolCall.id?.length > 0 ? toolCall.id : nanoid(),
-              })
-            }
-          }
-
-          const assistantMsg: AssistantMessage = {
-            type: 'assistant',
-            message: {
-              role: 'assistant',
-              content: contentBlocks,
-              usage: {
-                input_tokens: unifiedResponse.usage.promptTokens ?? 0,
-                output_tokens: unifiedResponse.usage.completionTokens ?? 0,
-                prompt_tokens: unifiedResponse.usage.promptTokens ?? 0,
-                completion_tokens: unifiedResponse.usage.completionTokens ?? 0,
-              },
-            },
-            costUSD: 0,
-            durationMs: Date.now() - start,
-            uuid: `${Date.now()}-${Math.random()
-              .toString(36)
-              .substr(2, 9)}` as any,
-            responseId: unifiedResponse.responseId,
-          }
+          const assistantMessage = buildAssistantMessageFromUnifiedResponse(
+            unifiedResponse,
+            start,
+          )
+          assistantMessage.message.usage = normalizeUsage(assistantMessage.message.usage)
 
           return {
-            assistantMessage: assistantMsg,
+            assistantMessage,
             rawResponse: unifiedResponse,
-            apiFormat: 'openai_responses',
+            apiFormat: 'openai',
           }
         }
 
@@ -2126,7 +2104,7 @@ async function queryOpenAI(
   logLLMInteraction({
     systemPrompt: systemPrompt.join('\n'),
     messages: [...openaiSystem, ...openaiMessages],
-    response: queryResult.rawResponse || assistantMessage.message,
+    response: assistantMessage.message || queryResult.rawResponse,
     usage: {
       inputTokens,
       outputTokens,
@@ -2148,6 +2126,55 @@ async function queryOpenAI(
 function getMaxTokensFromProfile(modelProfile: any): number {
   // Use ModelProfile maxTokens or reasonable default
   return modelProfile?.maxTokens || 8000
+}
+
+function buildAssistantMessageFromUnifiedResponse(
+  unifiedResponse: any,
+  startTime: number
+): AssistantMessage {
+  // Convert UnifiedResponse.toolCalls to tool_use content blocks
+  const contentBlocks = [...(unifiedResponse.content || [])]
+
+  if (unifiedResponse.toolCalls && unifiedResponse.toolCalls.length > 0) {
+    for (const toolCall of unifiedResponse.toolCalls) {
+      const tool = toolCall.function
+      const toolName = tool?.name
+      let toolArgs = {}
+      try {
+        toolArgs = tool?.arguments ? JSON.parse(tool.arguments) : {}
+      } catch (e) {
+        // Invalid JSON in tool arguments
+      }
+
+      contentBlocks.push({
+        type: 'tool_use',
+        input: toolArgs,
+        name: toolName,
+        id: toolCall.id?.length > 0 ? toolCall.id : nanoid(),
+      })
+    }
+  }
+
+  return {
+    type: 'assistant',
+    message: {
+      role: 'assistant',
+      content: contentBlocks,
+      usage: {
+        input_tokens: unifiedResponse.usage?.promptTokens ?? unifiedResponse.usage?.input_tokens ?? 0,
+        output_tokens: unifiedResponse.usage?.completionTokens ?? unifiedResponse.usage?.output_tokens ?? 0,
+        prompt_tokens: unifiedResponse.usage?.promptTokens ?? unifiedResponse.usage?.input_tokens ?? 0,
+        completion_tokens: unifiedResponse.usage?.completionTokens ?? unifiedResponse.usage?.output_tokens ?? 0,
+        promptTokens: unifiedResponse.usage?.promptTokens ?? unifiedResponse.usage?.input_tokens ?? 0,
+        completionTokens: unifiedResponse.usage?.completionTokens ?? unifiedResponse.usage?.output_tokens ?? 0,
+        totalTokens: unifiedResponse.usage?.totalTokens ?? (unifiedResponse.usage?.promptTokens ?? unifiedResponse.usage?.input_tokens ?? 0) + (unifiedResponse.usage?.completionTokens ?? unifiedResponse.usage?.output_tokens ?? 0),
+      },
+    },
+    costUSD: 0,
+    durationMs: Date.now() - startTime,
+    uuid: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}` as any,
+    responseId: unifiedResponse.responseId,
+  }
 }
 
 function normalizeUsage(usage?: any) {
