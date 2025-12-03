@@ -85,7 +85,7 @@ function normalizeNewlines(text: string): string {
 }
 
 export type ExternalEditorResult =
-  | { text: string; editorLabel: string }
+  | { text: string; editorLabel: string; error?: undefined }
   | { text: null; editorLabel?: string; error: Error }
 
 export async function launchExternalEditor(
