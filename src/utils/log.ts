@@ -387,12 +387,30 @@ export function parseISOString(s: string): Date {
   )
 }
 
+function formatTimestamp(): string {
+  const now = new Date()
+  return now.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
+
 export function logMCPError(serverName: string, error: unknown): void {
   try {
     const logDir = CACHE_PATHS.mcpLogs(serverName)
     const errorStr =
       error instanceof Error ? error.stack || error.message : String(error)
     const timestamp = new Date().toISOString()
+
+    // Console output with formatted timestamp
+    console.error(
+      `[${formatTimestamp()}] [MCP:${serverName}] ERROR: ${errorStr}`,
+    )
 
     const logFile = join(logDir, DATE + '.txt')
 

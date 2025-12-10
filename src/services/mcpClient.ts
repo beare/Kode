@@ -40,6 +40,29 @@ import { PRODUCT_COMMAND } from '@constants/product'
 
 type McpName = string
 
+/**
+ * Format timestamp for MCP logs
+ */
+function getTimestamp(): string {
+  const now = new Date()
+  return now.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+}
+
+/**
+ * Log MCP info message with timestamp
+ */
+function logMCPInfo(serverName: string, message: string): void {
+  console.log(`[${getTimestamp()}] [MCP:${serverName}] ${message}`)
+}
+
 export function parseEnvVars(
   rawEnvArgs: string[] | undefined,
 ): Record<string, string> {
@@ -221,13 +244,37 @@ export function getMcpServer(name: McpName): ScopedMcpServerConfig | undefined {
   return undefined
 }
 
+/**
+ * Check if an SSE error is a normal timeout/disconnect that we should handle gracefully
+ */
+function isExpectedSSEError(error: any): boolean {
+  const errorMessage = error?.message || error?.event?.message || String(error)
+  const lowerMessage = errorMessage.toLowerCase()
+
+  return (
+    lowerMessage.includes('timeout') ||
+    lowerMessage.includes('connection closed') ||
+    lowerMessage.includes('connection lost') ||
+    lowerMessage.includes('sse error') ||
+    error?.code === 'ECONNRESET' ||
+    error?.code === 'ETIMEDOUT'
+  )
+}
+
 async function connectToServer(
   name: string,
   serverRef: McpServerConfig,
 ): Promise<Client> {
   const transport =
     serverRef.type === 'sse'
-      ? new SSEClientTransport(new URL(serverRef.url))
+      ? new SSEClientTransport(new URL(serverRef.url), {
+          // Configure EventSource to not automatically retry on errors
+          // We handle reconnection ourselves with exponential backoff
+          eventSourceInit: {
+            // @ts-ignore - withCredentials is not in type def but supported
+            withCredentials: false,
+          },
+        })
       : new StdioClientTransport({
           command: serverRef.command,
           args: serverRef.args,
@@ -277,6 +324,33 @@ async function connectToServer(
       }
     })
   }
+
+  // Add global error handler for SSE connections to catch unhandled EventSource errors
+  if (serverRef.type === 'sse') {
+    const originalOnError = (client as any).onError
+    ;(client as any).onError = (error: any) => {
+      // Check if this is an expected SSE error
+      if (isExpectedSSEError(error)) {
+        logMCPInfo(
+          name,
+          `SSE transport error (expected): ${error?.message || String(error)}`,
+        )
+        // Don't propagate expected errors as they'll be handled by our reconnection logic
+        return
+      }
+
+      // For unexpected errors, call the original handler if it exists
+      if (originalOnError) {
+        originalOnError.call(client, error)
+      } else {
+        logMCPError(
+          name,
+          `Unhandled client error: ${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    }
+  }
+
   return client
 }
 
@@ -284,6 +358,10 @@ type ConnectedClient = {
   client: Client
   name: string
   type: 'connected'
+  serverConfig: McpServerConfig
+  keepaliveTimer?: NodeJS.Timeout
+  reconnectAttempts?: number
+  isReconnecting?: boolean
 }
 type FailedClient = {
   name: string
@@ -302,6 +380,215 @@ export function getMcprcServerStatus(
     return 'rejected'
   }
   return 'pending'
+}
+
+// SSE Keepalive configuration
+const KEEPALIVE_INTERVAL_MS = 2 * 60 * 1000 // 2 minutes (less than server's 5 min timeout)
+const MAX_RECONNECT_ATTEMPTS = 5
+const RECONNECT_BASE_DELAY_MS = 1000 // 1 second
+const RECONNECT_MAX_DELAY_MS = 30000 // 30 seconds
+
+/**
+ * Setup keepalive mechanism for SSE connections
+ * Periodically checks connection health and performs lightweight operations
+ */
+function setupSSEKeepalive(wrappedClient: ConnectedClient): void {
+  // Clear existing timer if any
+  if (wrappedClient.keepaliveTimer) {
+    clearInterval(wrappedClient.keepaliveTimer)
+  }
+
+  wrappedClient.keepaliveTimer = setInterval(() => {
+    // Use non-async wrapper to avoid unhandled promise rejections
+    ;(async () => {
+      try {
+        // Perform a lightweight operation to keep connection alive
+        await wrappedClient.client.getServerCapabilities()
+        // Only log keepalive success in debug mode to reduce noise
+        // logMCPInfo(wrappedClient.name, 'Keepalive check passed')
+      } catch (error) {
+        // Check if this is an expected error
+        const isExpected = isExpectedSSEError(error)
+
+        if (isExpected) {
+          logMCPInfo(
+            wrappedClient.name,
+            'Keepalive detected connection issue (timeout/disconnect), will reconnect...',
+          )
+        } else {
+          logMCPError(
+            wrappedClient.name,
+            `Keepalive check failed: ${error instanceof Error ? error.message : String(error)}`,
+          )
+        }
+
+        // Connection lost, trigger reconnection
+        clearInterval(wrappedClient.keepaliveTimer!)
+        wrappedClient.keepaliveTimer = undefined
+        attemptReconnect(wrappedClient).catch(err => {
+          logMCPError(
+            wrappedClient.name,
+            `Reconnect failed in keepalive: ${err instanceof Error ? err.message : String(err)}`,
+          )
+        })
+      }
+    })()
+  }, KEEPALIVE_INTERVAL_MS)
+}
+
+/**
+ * Attempt to reconnect to an SSE server with exponential backoff
+ */
+async function attemptReconnect(
+  wrappedClient: ConnectedClient,
+): Promise<void> {
+  // Prevent concurrent reconnection attempts
+  if (wrappedClient.isReconnecting) {
+    logMCPInfo(wrappedClient.name, 'Already reconnecting, skipping...')
+    return
+  }
+
+  wrappedClient.isReconnecting = true
+  const attempts = wrappedClient.reconnectAttempts ?? 0
+
+  if (attempts >= MAX_RECONNECT_ATTEMPTS) {
+    logMCPError(
+      wrappedClient.name,
+      `Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached, giving up`,
+    )
+    wrappedClient.isReconnecting = false
+    // Don't reset all clients, just mark this one as failed
+    return
+  }
+
+  // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+  const delay = Math.min(
+    RECONNECT_BASE_DELAY_MS * Math.pow(2, attempts),
+    RECONNECT_MAX_DELAY_MS,
+  )
+
+  logMCPInfo(
+    wrappedClient.name,
+    `Attempting reconnection (${attempts + 1}/${MAX_RECONNECT_ATTEMPTS}) in ${delay}ms...`,
+  )
+
+  await new Promise(resolve => setTimeout(resolve, delay))
+
+  try {
+    // Get fresh config in case it was updated
+    const freshServerRef = getMcpServer(wrappedClient.name)
+    const serverConfig = freshServerRef
+      ? (freshServerRef as McpServerConfig)
+      : wrappedClient.serverConfig
+
+    logMCPInfo(
+      wrappedClient.name,
+      `Connecting to ${serverConfig.type === 'sse' ? serverConfig.url : serverConfig.command}...`,
+    )
+
+    const newClient = await connectToServer(wrappedClient.name, serverConfig)
+
+    // Update the client reference and config
+    wrappedClient.client = newClient
+    wrappedClient.serverConfig = serverConfig
+    wrappedClient.reconnectAttempts = 0
+    wrappedClient.isReconnecting = false
+
+    logMCPInfo(wrappedClient.name, 'Successfully reconnected!')
+
+    // Re-setup keepalive and connection monitoring
+    setupSSEKeepalive(wrappedClient)
+    setupSSEConnectionMonitoring(wrappedClient)
+  } catch (error) {
+    logMCPError(
+      wrappedClient.name,
+      `Reconnection attempt ${attempts + 1} failed: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    wrappedClient.reconnectAttempts = attempts + 1
+    wrappedClient.isReconnecting = false
+    await attemptReconnect(wrappedClient)
+  }
+}
+
+/**
+ * Setup connection monitoring for SSE connections
+ * Handles connection errors and closures
+ */
+function setupSSEConnectionMonitoring(
+  wrappedClient: ConnectedClient,
+): void {
+  const transport = (wrappedClient.client as any)._transport
+  if (!transport) {
+    logMCPError(
+      wrappedClient.name,
+      'Transport not found, cannot setup monitoring',
+    )
+    return
+  }
+
+  logMCPInfo(wrappedClient.name, 'Setting up SSE connection monitoring')
+
+  transport.onerror = (event: any) => {
+    // Check if this is an expected error (timeout, disconnect, etc.)
+    const isExpected = isExpectedSSEError(event)
+
+    if (isExpected) {
+      logMCPInfo(
+        wrappedClient.name,
+        'SSE connection interrupted (expected: timeout/disconnect), will reconnect...',
+      )
+    } else {
+      logMCPError(
+        wrappedClient.name,
+        `Unexpected SSE error: ${event?.message || String(event)}`,
+      )
+    }
+
+    // Clear keepalive timer
+    if (wrappedClient.keepaliveTimer) {
+      clearInterval(wrappedClient.keepaliveTimer)
+      wrappedClient.keepaliveTimer = undefined
+    }
+
+    // Trigger reconnection
+    attemptReconnect(wrappedClient).catch(err => {
+      logMCPError(
+        wrappedClient.name,
+        `Reconnect failed after error: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    })
+  }
+
+  transport.onclose = (event: any) => {
+    logMCPInfo(
+      wrappedClient.name,
+      'SSE connection closed gracefully, will reconnect...',
+    )
+
+    // Clear keepalive timer
+    if (wrappedClient.keepaliveTimer) {
+      clearInterval(wrappedClient.keepaliveTimer)
+      wrappedClient.keepaliveTimer = undefined
+    }
+
+    // Trigger reconnection
+    attemptReconnect(wrappedClient).catch(err => {
+      logMCPError(
+        wrappedClient.name,
+        `Reconnect failed after close: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    })
+  }
+}
+
+/**
+ * Cleanup keepalive timers for a client
+ */
+function cleanupKeepalive(wrappedClient: ConnectedClient): void {
+  if (wrappedClient.keepaliveTimer) {
+    clearInterval(wrappedClient.keepaliveTimer)
+    wrappedClient.keepaliveTimer = undefined
+  }
 }
 
 export const getClients = memoize(async (): Promise<WrappedClient[]> => {
@@ -331,31 +618,35 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
     Object.entries(allServers).map(async ([name, serverRef]) => {
       try {
         const serverConfig = serverRef as McpServerConfig
+        logMCPInfo(
+          name,
+          `Connecting to ${serverConfig.type === 'sse' ? serverConfig.url : serverConfig.command}...`,
+        )
+
         const client = await connectToServer(name, serverConfig)
 
-        // For SSE connections, monitor connection health
-        if (serverConfig.type === 'sse') {
-          // Set up reconnection on transport close/error
-          const transport = (client as any)._transport
-          if (transport) {
-            transport.onerror = () => {
-              logMCPError(
-                name,
-                'SSE connection lost, clearing cache for reconnection',
-              )
-              resetMCPClients()
-            }
-            transport.onclose = () => {
-              logMCPError(
-                name,
-                'SSE connection closed, clearing cache for reconnection',
-              )
-              resetMCPClients()
-            }
-          }
+        const wrappedClient: ConnectedClient = {
+          name,
+          client,
+          type: 'connected' as const,
+          serverConfig, // Store config for reconnection
+          reconnectAttempts: 0,
+          isReconnecting: false,
         }
 
-        return { name, client, type: 'connected' as const }
+        logMCPInfo(name, 'Successfully connected')
+
+        // For SSE connections, setup keepalive and connection monitoring
+        if (serverConfig.type === 'sse') {
+          logMCPInfo(
+            name,
+            `Setting up keepalive (interval: ${KEEPALIVE_INTERVAL_MS}ms)`,
+          )
+          setupSSEKeepalive(wrappedClient)
+          setupSSEConnectionMonitoring(wrappedClient)
+        }
+
+        return wrappedClient
       } catch (error) {
         logMCPError(
           name,
@@ -373,7 +664,19 @@ export const getClients = memoize(async (): Promise<WrappedClient[]> => {
  * Reset MCP client connections cache
  * This allows reconnection to previously failed or disconnected servers
  */
-export function resetMCPClients(): void {
+export async function resetMCPClients(): Promise<void> {
+  // Cleanup keepalive timers before clearing cache
+  try {
+    const clients = await getClients()
+    clients.forEach(client => {
+      if (client.type === 'connected') {
+        cleanupKeepalive(client)
+      }
+    })
+  } catch {
+    // Ignore errors during cleanup
+  }
+
   getClients.cache.clear?.()
   getMCPTools.cache.clear?.()
   getMCPCommands.cache.clear?.()
