@@ -61,7 +61,7 @@ const USER_FRIENDLY_LEVELS = new Set([
 const STARTUP_TIMESTAMP = new Date().toISOString().replace(/[:.]/g, '-')
 const REQUEST_START_TIME = Date.now()
 
-// 路径配置 - 统一使用 ~/.kode 目录
+// 路径配置 - 统一使用 ~/.opseye 目录
 const KODE_DIR = join(homedir(), '.opseye')
 function getProjectDir(cwd: string): string {
   return cwd.replace(/[^a-zA-Z0-9]/g, '-')

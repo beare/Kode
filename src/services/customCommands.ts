@@ -381,7 +381,7 @@ function createCustomCommand(
   // Determine scope based on directory location
   // This follows the same pattern as Claude Desktop's command system
   const userClaudeDir = join(homedir(), '.claude', 'commands')
-  const userKodeDir = join(homedir(), '.kode', 'commands')
+  const userKodeDir = join(homedir(), '.opseye', 'commands')
   const scope: 'user' | 'project' =
     (baseDir === userClaudeDir || baseDir === userKodeDir) ? 'user' : 'project'
   const prefix = scope === 'user' ? 'user' : 'project'
@@ -503,11 +503,11 @@ function createCustomCommand(
  */
 export const loadCustomCommands = memoize(
   async (): Promise<CustomCommandWithScope[]> => {
-    // Support both .claude and .kode directories
+    // Support both .claude and .opseye directories
     const userClaudeDir = join(homedir(), '.claude', 'commands')
     const projectClaudeDir = join(getCwd(), '.claude', 'commands')
-    const userKodeDir = join(homedir(), '.kode', 'commands')
-    const projectKodeDir = join(getCwd(), '.kode', 'commands')
+    const userKodeDir = join(homedir(), '.opseye', 'commands')
+    const projectKodeDir = join(getCwd(), '.opseye', 'commands')
 
     // Set up abort controller for timeout handling
     const abortController = new AbortController()
@@ -569,7 +569,7 @@ export const loadCustomCommands = memoize(
           const { frontmatter, content: commandContent } =
             parseFrontmatter(content)
           // Determine which base directory this file is from
-          const baseDir = filePath.includes('.kode/commands') ? projectKodeDir : projectClaudeDir
+          const baseDir = filePath.includes('.opseye/commands') ? projectKodeDir : projectClaudeDir
           const command = createCustomCommand(
             frontmatter,
             commandContent,
@@ -592,7 +592,7 @@ export const loadCustomCommands = memoize(
           const { frontmatter, content: commandContent } =
             parseFrontmatter(content)
           // Determine which base directory this file is from
-          const baseDir = filePath.includes('.kode/commands') ? userKodeDir : userClaudeDir
+          const baseDir = filePath.includes('.opseye/commands') ? userKodeDir : userClaudeDir
           const command = createCustomCommand(
             frontmatter,
             commandContent,
@@ -628,8 +628,8 @@ export const loadCustomCommands = memoize(
     const cwd = getCwd()
     const userClaudeDir = join(homedir(), '.claude', 'commands')
     const projectClaudeDir = join(cwd, '.claude', 'commands')
-    const userKodeDir = join(homedir(), '.kode', 'commands')
-    const projectKodeDir = join(cwd, '.kode', 'commands')
+    const userKodeDir = join(homedir(), '.opseye', 'commands')
+    const projectKodeDir = join(cwd, '.opseye', 'commands')
 
     // Create cache key that includes directory existence and timestamp
     // This provides reasonable cache invalidation without excessive file system checks
@@ -669,8 +669,8 @@ export function getCustomCommandDirectories(): {
   return {
     userClaude: join(homedir(), '.claude', 'commands'),
     projectClaude: join(getCwd(), '.claude', 'commands'),
-    userKode: join(homedir(), '.kode', 'commands'),
-    projectKode: join(getCwd(), '.kode', 'commands'),
+    userKode: join(homedir(), '.opseye', 'commands'),
+    projectKode: join(getCwd(), '.opseye', 'commands'),
   }
 }
 

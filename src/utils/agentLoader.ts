@@ -133,8 +133,8 @@ async function loadAllAgents(): Promise<{
   allAgents: AgentConfig[]
 }> {
   try {
-    // Scan both .claude and .kode directories in parallel
-    // Claude Code compatibility: support both ~/.claude/agents and ~/.kode/agents
+    // Scan both .claude and .opseye directories in parallel
+    // Claude Code compatibility: support both ~/.claude/agents and ~/.opseye/agents
     const userClaudeDir = join(homedir(), '.claude', 'agents')
     const userKodeDir = join(homedir(), '.opseye', 'agents')
     const projectClaudeDir = join(getCwd(), '.claude', 'agents')
@@ -150,7 +150,7 @@ async function loadAllAgents(): Promise<{
     // Built-in agents (currently just general-purpose)
     const builtinAgents = [BUILTIN_GENERAL_PURPOSE]
     
-    // Apply priority override: built-in < .claude (user) < .kode (user) < .claude (project) < .kode (project)
+    // Apply priority override: built-in < .claude (user) < .opseye (user) < .claude (project) < .opseye (project)
     const agentMap = new Map<string, AgentConfig>()
     
     // Add in priority order (later entries override earlier ones)
@@ -232,7 +232,7 @@ let watchers: FSWatcher[] = []
 export async function startAgentWatcher(onChange?: () => void): Promise<void> {
   await stopAgentWatcher() // Clean up any existing watchers
   
-  // Watch both Claude (.claude) and native (.kode) directories
+  // Watch both Claude (.claude) and native (.opseye) directories
   const userClaudeDir = join(homedir(), '.claude', 'agents')
   const userKodeDir = join(homedir(), '.opseye', 'agents')
   const projectClaudeDir = join(getCwd(), '.claude', 'agents')

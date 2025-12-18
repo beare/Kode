@@ -107,12 +107,12 @@ async function loadAllSkills(): Promise<{
   allSkills: SkillConfig[]
 }> {
   try {
-    // Scan both .claude and .kode directories in parallel
-    // Priority: .claude (user) < .kode (user) < .claude (project) < .kode (project)
+    // Scan both .claude and .opseye directories in parallel
+    // Priority: .claude (user) < .opseye (user) < .claude (project) < .opseye (project)
     const userClaudeDir = join(homedir(), '.claude', 'skills')
-    const userKodeDir = join(homedir(), '.kode', 'skills')
+    const userKodeDir = join(homedir(), '.opseye', 'skills')
     const projectClaudeDir = join(getCwd(), '.claude', 'skills')
-    const projectKodeDir = join(getCwd(), '.kode', 'skills')
+    const projectKodeDir = join(getCwd(), '.opseye', 'skills')
 
     const [userClaudeSkills, userKodeSkills, projectClaudeSkills, projectKodeSkills] = await Promise.all([
       scanSkillDirectory(userClaudeDir, 'user'),
@@ -227,9 +227,9 @@ export async function startSkillWatcher(onChange?: () => void): Promise<void> {
   await stopSkillWatcher() // Clean up any existing watchers
 
   const userClaudeDir = join(homedir(), '.claude', 'skills')
-  const userKodeDir = join(homedir(), '.kode', 'skills')
+  const userKodeDir = join(homedir(), '.opseye', 'skills')
   const projectClaudeDir = join(getCwd(), '.claude', 'skills')
-  const projectKodeDir = join(getCwd(), '.kode', 'skills')
+  const projectKodeDir = join(getCwd(), '.opseye', 'skills')
 
   const watchDirectory = (dirPath: string, label: string) => {
     if (existsSync(dirPath)) {
@@ -246,9 +246,9 @@ export async function startSkillWatcher(onChange?: () => void): Promise<void> {
   }
 
   watchDirectory(userClaudeDir, 'user/.claude/skills')
-  watchDirectory(userKodeDir, 'user/.kode/skills')
+  watchDirectory(userKodeDir, 'user/.opseye/skills')
   watchDirectory(projectClaudeDir, 'project/.claude/skills')
-  watchDirectory(projectKodeDir, 'project/.kode/skills')
+  watchDirectory(projectKodeDir, 'project/.opseye/skills')
 }
 
 /**

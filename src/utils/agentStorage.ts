@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto'
  * Get the kode config directory
  */
 function getConfigDirectory(): string {
-  return process.env.KODE_CONFIG_DIR ?? process.env.ANYKODE_CONFIG_DIR ?? join(homedir(), '.kode')
+  return process.env.KODE_CONFIG_DIR ?? process.env.ANYKODE_CONFIG_DIR ?? join(homedir(), '.opseye')
 }
 
 /**
@@ -27,7 +27,7 @@ function getSessionId(): string {
 /**
  * Generate agent-specific file path
  * Pattern: ${sessionId}-agent-${agentId}.json
- * Stored in ~/.kode/ directory
+ * Stored in ~/.opseye/ directory
  */
 export function getAgentFilePath(agentId: string): string {
   const sessionId = getSessionId()
