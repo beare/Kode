@@ -384,9 +384,8 @@ export function getMcprcServerStatus(
 
 // SSE Keepalive configuration
 const KEEPALIVE_INTERVAL_MS = 2 * 60 * 1000 // 2 minutes (less than server's 5 min timeout)
-const MAX_RECONNECT_ATTEMPTS = 5
 const RECONNECT_BASE_DELAY_MS = 1000 // 1 second
-const RECONNECT_MAX_DELAY_MS = 30000 // 30 seconds
+const RECONNECT_MAX_DELAY_MS = 32 * 1000 // 32 seconds (max backoff delay)
 
 /**
  * Setup keepalive mechanism for SSE connections
@@ -438,6 +437,7 @@ function setupSSEKeepalive(wrappedClient: ConnectedClient): void {
 
 /**
  * Attempt to reconnect to an SSE server with exponential backoff
+ * Will retry indefinitely until successful
  */
 async function attemptReconnect(
   wrappedClient: ConnectedClient,
@@ -451,25 +451,21 @@ async function attemptReconnect(
   wrappedClient.isReconnecting = true
   const attempts = wrappedClient.reconnectAttempts ?? 0
 
-  if (attempts >= MAX_RECONNECT_ATTEMPTS) {
-    logMCPError(
-      wrappedClient.name,
-      `Max reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached, giving up`,
-    )
-    wrappedClient.isReconnecting = false
-    // Don't reset all clients, just mark this one as failed
-    return
-  }
-
-  // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
+  // Exponential backoff: 1s, 2s, 4s, 8s, 16s, ..., max 5 minutes
   const delay = Math.min(
     RECONNECT_BASE_DELAY_MS * Math.pow(2, attempts),
     RECONNECT_MAX_DELAY_MS,
   )
 
+  // Format delay for human readability
+  const delayStr =
+    delay < 60000
+      ? `${(delay / 1000).toFixed(0)}s`
+      : `${(delay / 60000).toFixed(1)}min`
+
   logMCPInfo(
     wrappedClient.name,
-    `Attempting reconnection (${attempts + 1}/${MAX_RECONNECT_ATTEMPTS}) in ${delay}ms...`,
+    `Attempting reconnection (attempt #${attempts + 1}) in ${delayStr}...`,
   )
 
   await new Promise(resolve => setTimeout(resolve, delay))
@@ -494,16 +490,37 @@ async function attemptReconnect(
     wrappedClient.reconnectAttempts = 0
     wrappedClient.isReconnecting = false
 
-    logMCPInfo(wrappedClient.name, 'Successfully reconnected!')
+    logMCPInfo(
+      wrappedClient.name,
+      `Successfully reconnected after ${attempts + 1} attempt(s)!`,
+    )
 
     // Re-setup keepalive and connection monitoring
     setupSSEKeepalive(wrappedClient)
     setupSSEConnectionMonitoring(wrappedClient)
   } catch (error) {
-    logMCPError(
-      wrappedClient.name,
-      `Reconnection attempt ${attempts + 1} failed: ${error instanceof Error ? error.message : String(error)}`,
-    )
+    const errorMsg =
+      error instanceof Error ? error.message : String(error)
+
+    // Check if it's a connection error (expected) vs other errors
+    const isConnectionError =
+      errorMsg.includes('timeout') ||
+      errorMsg.includes('ECONNREFUSED') ||
+      errorMsg.includes('ENOTFOUND') ||
+      errorMsg.includes('ETIMEDOUT')
+
+    if (isConnectionError) {
+      logMCPInfo(
+        wrappedClient.name,
+        `Reconnection attempt #${attempts + 1} failed (connection error), will retry...`,
+      )
+    } else {
+      logMCPError(
+        wrappedClient.name,
+        `Reconnection attempt #${attempts + 1} failed: ${errorMsg}`,
+      )
+    }
+
     wrappedClient.reconnectAttempts = attempts + 1
     wrappedClient.isReconnecting = false
     await attemptReconnect(wrappedClient)
