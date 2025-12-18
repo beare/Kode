@@ -18,7 +18,7 @@ import { ThinkTool } from './tools/ThinkTool/ThinkTool'
 import { TodoWriteTool } from './tools/TodoWriteTool/TodoWriteTool'
 import { WebSearchTool } from './tools/WebSearchTool/WebSearchTool'
 import { URLFetcherTool } from './tools/URLFetcherTool/URLFetcherTool'
-// import { NetworkScanTool } from './tools/NetworkScanTool/NetworkScanTool'
+import { SkillTool } from './tools/SkillTool/SkillTool'
 import { getMCPTools } from './services/mcpClient'
 import { memoize } from 'lodash-es'
 
@@ -28,7 +28,7 @@ const ANT_ONLY_TOOLS = [MemoryReadTool as unknown as Tool, MemoryWriteTool as un
 export const getAllTools = (): Tool[] => {
   return [
     TaskTool as unknown as Tool,
-    // AskExpertModelTool as unknown as Tool,
+    AskExpertModelTool as unknown as Tool,
     BashTool as unknown as Tool,
     GlobTool as unknown as Tool,
     GrepTool as unknown as Tool,
@@ -43,7 +43,7 @@ export const getAllTools = (): Tool[] => {
     TodoWriteTool as unknown as Tool,
     WebSearchTool as unknown as Tool,
     URLFetcherTool as unknown as Tool,
-    // NetworkScanTool as unknown as Tool,
+    SkillTool as unknown as Tool,
     ...ANT_ONLY_TOOLS,
   ]
 }
