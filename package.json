@@ -1,6 +1,6 @@
 {
   "name": "@znb-ai/opseye",
-  "version": "1.1.57",
+  "version": "1.1.58",
   "bin": {
     "opseye": "cli.js"
   },

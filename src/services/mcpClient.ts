@@ -451,7 +451,7 @@ async function attemptReconnect(
   wrappedClient.isReconnecting = true
   const attempts = wrappedClient.reconnectAttempts ?? 0
 
-  // Exponential backoff: 1s, 2s, 4s, 8s, 16s, ..., max 5 minutes
+  // Exponential backoff: 1s, 2s, 4s, 8s, 16s, ..., max 32s
   const delay = Math.min(
     RECONNECT_BASE_DELAY_MS * Math.pow(2, attempts),
     RECONNECT_MAX_DELAY_MS,
@@ -471,6 +471,10 @@ async function attemptReconnect(
   await new Promise(resolve => setTimeout(resolve, delay))
 
   try {
+    // First, cleanup the old connection to prevent event handler conflicts
+    logMCPInfo(wrappedClient.name, 'Cleaning up old connection...')
+    await cleanupOldConnection(wrappedClient)
+
     // Get fresh config in case it was updated
     const freshServerRef = getMcpServer(wrappedClient.name)
     const serverConfig = freshServerRef
@@ -528,8 +532,45 @@ async function attemptReconnect(
 }
 
 /**
+ * Cleanup old client connection and transport
+ */
+async function cleanupOldConnection(wrappedClient: ConnectedClient): Promise<void> {
+  try {
+    // Clear keepalive timer
+    if (wrappedClient.keepaliveTimer) {
+      clearInterval(wrappedClient.keepaliveTimer)
+      wrappedClient.keepaliveTimer = undefined
+    }
+
+    // Get transport and remove event handlers
+    const transport = (wrappedClient.client as any)._transport
+    if (transport) {
+      // Remove event handlers to prevent them from triggering during cleanup
+      transport.onerror = null
+      transport.onclose = null
+
+      // Close transport if it has a close method
+      if (typeof transport.close === 'function') {
+        await transport.close()
+      }
+    }
+
+    // Close client connection
+    if (typeof wrappedClient.client.close === 'function') {
+      await wrappedClient.client.close()
+    }
+  } catch (error) {
+    // Ignore cleanup errors, just log them
+    logMCPInfo(
+      wrappedClient.name,
+      `Cleanup warning: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
+
+/**
  * Setup connection monitoring for SSE connections
- * Handles connection errors and closures
+ * Handles connection errors and closures with debouncing
  */
 function setupSSEConnectionMonitoring(
   wrappedClient: ConnectedClient,
@@ -545,56 +586,59 @@ function setupSSEConnectionMonitoring(
 
   logMCPInfo(wrappedClient.name, 'Setting up SSE connection monitoring')
 
+  // Debounce flag to prevent multiple simultaneous reconnection attempts
+  let errorDebounceTimer: NodeJS.Timeout | null = null
+  const DEBOUNCE_MS = 100 // 100ms debounce window
+
+  const handleDisconnection = (reason: string, isExpected: boolean) => {
+    // Clear any existing debounce timer
+    if (errorDebounceTimer) {
+      clearTimeout(errorDebounceTimer)
+    }
+
+    // Debounce reconnection attempts
+    errorDebounceTimer = setTimeout(() => {
+      errorDebounceTimer = null
+
+      // Check if already reconnecting
+      if (wrappedClient.isReconnecting) {
+        return
+      }
+
+      if (isExpected) {
+        logMCPInfo(wrappedClient.name, `${reason}, will reconnect...`)
+      } else {
+        logMCPError(wrappedClient.name, reason)
+      }
+
+      // Clear keepalive timer
+      if (wrappedClient.keepaliveTimer) {
+        clearInterval(wrappedClient.keepaliveTimer)
+        wrappedClient.keepaliveTimer = undefined
+      }
+
+      // Trigger reconnection
+      attemptReconnect(wrappedClient).catch(err => {
+        logMCPError(
+          wrappedClient.name,
+          `Reconnect failed: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      })
+    }, DEBOUNCE_MS)
+  }
+
   transport.onerror = (event: any) => {
     // Check if this is an expected error (timeout, disconnect, etc.)
     const isExpected = isExpectedSSEError(event)
+    const reason = isExpected
+      ? 'SSE connection interrupted (expected: timeout/disconnect)'
+      : `Unexpected SSE error: ${event?.message || String(event)}`
 
-    if (isExpected) {
-      logMCPInfo(
-        wrappedClient.name,
-        'SSE connection interrupted (expected: timeout/disconnect), will reconnect...',
-      )
-    } else {
-      logMCPError(
-        wrappedClient.name,
-        `Unexpected SSE error: ${event?.message || String(event)}`,
-      )
-    }
-
-    // Clear keepalive timer
-    if (wrappedClient.keepaliveTimer) {
-      clearInterval(wrappedClient.keepaliveTimer)
-      wrappedClient.keepaliveTimer = undefined
-    }
-
-    // Trigger reconnection
-    attemptReconnect(wrappedClient).catch(err => {
-      logMCPError(
-        wrappedClient.name,
-        `Reconnect failed after error: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    })
+    handleDisconnection(reason, isExpected)
   }
 
   transport.onclose = (event: any) => {
-    logMCPInfo(
-      wrappedClient.name,
-      'SSE connection closed gracefully, will reconnect...',
-    )
-
-    // Clear keepalive timer
-    if (wrappedClient.keepaliveTimer) {
-      clearInterval(wrappedClient.keepaliveTimer)
-      wrappedClient.keepaliveTimer = undefined
-    }
-
-    // Trigger reconnection
-    attemptReconnect(wrappedClient).catch(err => {
-      logMCPError(
-        wrappedClient.name,
-        `Reconnect failed after close: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    })
+    handleDisconnection('SSE connection closed gracefully', true)
   }
 }
 
